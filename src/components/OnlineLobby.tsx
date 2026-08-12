@@ -103,6 +103,7 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
           <DecisionModal
             decision={game.pendingDecision}
             viewerPlayerId={viewerId}
+            playerHand={game.players.find(p => p.id === viewerId)?.hand}
             onResolve={(decisionId, choiceIds) =>
               clientRef.current?.resolveDecision(decisionId, choiceIds)
             }
