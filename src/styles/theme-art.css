@@ -1,0 +1,95 @@
+/* ============================================================
+   THEME ART — apothecary-table background
+   ============================================================
+   Replaces base.css's flat `radial-gradient` body background with the
+   photographed wood-table artwork, plus a legibility scrim. Lives in its
+   own file (not edited into base.css) so the two concerns — base reset vs.
+   this theme's decoration — stay separable; a later theme swap only ever
+   touches this file.
+
+   Everything here targets selectors base.css already defines
+   (`body`, `body::before`) and relies on cascade order, not specificity, to
+   win: index.css imports this file last, so an identical-specificity
+   selector declared here always overrides the one in base.css. Nothing in
+   base.css itself needed to change. */
+
+/* ── Responsive source selection ──
+   A full-viewport `cover` background's needed resolution scales with
+   VIEWPORT WIDTH (times device-pixel-ratio), not DPR alone. image-set()
+   only reasons about DPR: a phone at 390 CSS px but 3x DPR would, under an
+   image-set 1x/2x/3x mapping, request the *largest* listed image (there is
+   no tier past 2x to stop it) even though 390×3=1170 physical px is well
+   inside the 1200-wide asset — exactly the "phone downloads the 1920"
+   failure this task warns about. Width-based media queries tie the choice
+   to the thing that actually drives it, need no vendor-prefixed fallback,
+   and have had universal support since long before this project's other
+   baseline requirements (dvh, clamp, backdrop-filter). So: width queries,
+   no image-set. Breakpoints match this project's own mobile (800px) and
+   large-desktop (1600px) breakpoints (responsive.css) so the same viewport
+   buckets that already retune card sizing also retune the art. */
+:root {
+  --bg-art: url('../assets/bg-800.webp');
+}
+@media (min-width: 801px) {
+  :root { --bg-art: url('../assets/bg-1200.webp'); }
+}
+@media (min-width: 1600px) {
+  :root { --bg-art: url('../assets/bg-1920.webp'); }
+}
+
+/* ── Art + scrim, on a dedicated fixed layer ──
+   base.css's body::before was a 44px dot-grid at 3.5% opacity — a texture
+   added because the old background was a flat, texture-free gradient. A
+   photographed wood-grain table already supplies real texture (grain,
+   gold filigree, prop shadows), so the synthetic dot lattice on top of it
+   reads as sensor-noise/moiré rather than adding anything; it is dropped
+   here rather than tuned down.
+
+   The pseudo-element is repurposed to carry both the artwork and its scrim
+   instead. Deliberately NOT `background-attachment: fixed` on the `body`
+   element itself: that property has no compositing guarantee in WebKit and
+   is the documented source of mobile-Safari scroll jank/flicker this task
+   flags. `position: fixed` on a dedicated element, by contrast, reliably
+   gets its own compositor layer in every evergreen engine, so it never
+   repaints on scroll — cheaper than the attachment-based approach, not
+   just safer. It also sidesteps the body/html "canvas background"
+   propagation quirk (where the UA silently reassigns body's own
+   `background` to the viewport canvas and reinterprets attachment there)
+   by simply not touching body's `background` property at all: base.css's
+   original gradient stays exactly as it was, now acting as the fallback
+   paint if a browser can't decode webp.
+
+   Two background layers on one element: the scrim gradient (painted on
+   top, per CSS layering — first listed layer wins) plus the art (below
+   it). The gradient is lighter through the centre and darkens toward the
+   edges/corners: the artwork's own centre is already dark and deliberately
+   empty (that's where the deck/center-zone sits), so a uniform scrim would
+   waste it by flattening art that was already helping; darkening
+   specifically toward the edges is where the busy gold filigree and prop
+   corners are, which is also where the two sidebars sit — sidebar.css and
+   chat.css both already layer their own
+   `rgba(2, 12, 11, 0.35)` + `backdrop-filter: blur(6px)` panel background
+   on top of this, so the busiest art corners get three layers of
+   darkening/blur stacked (this scrim, the sidebar panel tint, the sidebar
+   blur) exactly where the risk is, while the open board area in the middle
+   is not over-darkened. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 1;
+  background-image:
+    radial-gradient(
+      ellipse at center,
+      rgba(2, 6, 23, 0.30) 0%,
+      rgba(2, 6, 23, 0.55) 55%,
+      rgba(2, 6, 23, 0.72) 78%,
+      rgba(2, 6, 23, 0.86) 100%
+    ),
+    var(--bg-art);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}

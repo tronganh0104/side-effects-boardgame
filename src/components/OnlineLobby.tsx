@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { GameBoard } from './GameBoard'
 import { DecisionModal } from './DecisionModal'
 import { FinishedScreen } from './FinishedScreen'
+import { ChatPanel } from './chat/ChatPanel'
 import {
   createMultiplayerClient,
   multiplayerServerUrl,
@@ -11,6 +12,7 @@ import {
 } from '../multiplayer/multiplayerClient'
 import type { PlayerGameView } from '../../server/game/playerView'
 import { localizeError, t } from '../i18n'
+import { useChatStore } from '../store/chatStore'
 
 interface OnlineLobbyProps {
   onBack: () => void
@@ -40,10 +42,12 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
         onGameLog: setGameLog,
         onConnectionState: setConnectionState,
         onSessionRestored: setSession,
+        onChatMessage: (message) => useChatStore.getState().append(message),
         onRoomLeft: () => {
           setRoom(undefined)
           setGame(undefined)
           setSession(undefined)
+          useChatStore.getState().reset()
         },
       },
     )
@@ -164,6 +168,23 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
               disorderCardId,
             })
           }}
+          onSendChat={(text) => clientRef.current?.sendChat(text)}
+          onInviteTrade={(targetPlayerId) =>
+            clientRef.current?.inviteTrade(targetPlayerId)
+          }
+          onAcceptTrade={() => clientRef.current?.acceptTrade()}
+          onDeclineTrade={() => clientRef.current?.declineTrade()}
+          onPlaceTradeCard={(cardInstanceId) =>
+            clientRef.current?.placeTradeCard(cardInstanceId)
+          }
+          onClearTradeCard={() => clientRef.current?.clearTradeCard()}
+          onConfirmTrade={() => clientRef.current?.confirmTrade()}
+          onCancelTrade={() => clientRef.current?.cancelTrade()}
+          tradeIneligiblePlayers={Object.fromEntries(
+            (room?.players ?? [])
+              .filter((player) => !player.connected)
+              .map((player) => [player.id, 'disconnected' as const]),
+          )}
         />
       </main>
     )
@@ -171,15 +192,15 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
 
   return (
     <main className="setup-screen">
-      <section className="panel online-lobby">
+      <section className={`panel online-lobby panel-surface panel-surface--framed${room ? ' has-chat' : ''}`}>
         <button
           type="button"
-          style={{ background: 'none', border: 'none', color: 'var(--text-faint)', fontSize: '0.82rem', fontWeight: 700, padding: '0.3rem 0', marginBottom: '1rem', minHeight: 'unset', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+          className="lobby-back-btn"
           onClick={onBack}
         >
           ← {t('back')}
         </button>
-        <h1 className="gradient-text" style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '1.4rem' }}>{t('onlineGame')}</h1>
+        <h1 className="online-lobby-title">{t('onlineGame')}</h1>
 
         {connectionState !== 'connected' && (
           <p className="error" style={{ marginBottom: '1rem' }}>
@@ -217,8 +238,7 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
               <span className="label">{t('roomCode')}</span>
               <div className="input-row">
                 <input
-                  className="field-input"
-                  style={{ textTransform: 'uppercase', letterSpacing: '0.2em', textAlign: 'center', fontWeight: 700 }}
+                  className="field-input room-code-input"
                   value={roomCode}
                   maxLength={6}
                   placeholder="ABC123"
@@ -226,7 +246,7 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
                 />
                 <button
                   type="button"
-                  style={{ flex: '0 0 auto', padding: '0 1.2rem', fontWeight: 800, background: 'linear-gradient(135deg, var(--green), #16a34a)', color: '#022c15', border: 'none', borderRadius: 'var(--radius-sm)' }}
+                  className="btn-join"
                   disabled={!displayName.trim() || !roomCode.trim()}
                   onClick={() => clientRef.current?.joinRoom(roomCode, displayName.trim())}
                 >
@@ -258,28 +278,35 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
               {allConnected ? 'Đã kết nối' : t('waitingForReconnect')}
             </p>
 
-            <ul className="lobby-players">
-              {room.players.map((player, idx) => {
-                const initials = player.displayName.charAt(0).toUpperCase()
-                const isHost = player.id === room.hostPlayerId
-                const isMe = player.id === session?.playerId
-                return (
-                  <li key={player.id}>
-                    <span className="player-avatar" style={{ background: `linear-gradient(135deg, hsl(${(idx * 60) % 360}, 60%, 45%), hsl(${(idx * 60 + 20) % 360}, 60%, 30%))` }}>
-                      {initials}
-                    </span>
-                    <span className="player-name-wrap">
-                      {player.displayName}
-                      {isMe && <span className="me-tag">BẠN</span>}
-                      {isHost && <span className="host-tag">👑 Chủ</span>}
-                    </span>
-                    <span className={`player-status ${player.connected ? 'connected' : ''}`}>
-                      {player.connected ? '● Đã kết nối' : '○ Đang chờ'}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
+            <div className="lobby-body">
+              <ul className="lobby-players">
+                {room.players.map((player, idx) => {
+                  const initials = player.displayName.charAt(0).toUpperCase()
+                  const isHost = player.id === room.hostPlayerId
+                  const isMe = player.id === session?.playerId
+                  return (
+                    <li key={player.id}>
+                      <span className="player-avatar" style={{ background: `linear-gradient(135deg, hsl(${(idx * 60) % 360}, 60%, 45%), hsl(${(idx * 60 + 20) % 360}, 60%, 30%))` }}>
+                        {initials}
+                      </span>
+                      <span className="player-name-wrap">
+                        {player.displayName}
+                        {isMe && <span className="me-tag">BẠN</span>}
+                        {isHost && <span className="host-tag">👑 Chủ</span>}
+                      </span>
+                      <span className={`player-status ${player.connected ? 'connected' : ''}`}>
+                        {player.connected ? '● Đã kết nối' : '○ Đang chờ'}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+              {/* Chat is available in the lobby too, not just in-game — negotiation can happen any time. */}
+              <ChatPanel
+                onSend={(text) => clientRef.current?.sendChat(text)}
+                viewerPlayerId={session?.playerId}
+              />
+            </div>
 
             <div className="button-row">
               {isHost && (
@@ -293,13 +320,13 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
                 </button>
               )}
               {!isHost && (
-                <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                <p className="waiting-host-msg">
                   {t('waitingForHost')}
                 </p>
               )}
               <button
                 type="button"
-                className="btn-danger"
+                className="btn-danger leave-room-btn"
                 onClick={() => clientRef.current?.leaveRoom()}
               >
                 Rời phòng

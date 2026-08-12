@@ -1,0 +1,249 @@
+/* ============================================================
+   TRADE (online + local hot-seat)
+   All sizing reuses --card-w/--card-h/--card-radius/--radius-sm from
+   tokens.css — no card dimension here is a hard-coded px value.
+   ============================================================ */
+
+/* ── Controls-bar entry point ── */
+.trade-open-btn { white-space: nowrap; }
+.trade-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-sm);
+  background: rgba(20, 184, 166, 0.1);
+  border: 1px solid rgba(20, 184, 166, 0.3);
+}
+.trade-waiting-label {
+  font-size: 0.76rem;
+  color: var(--teal);
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ── Sidebar invite badge ──
+   `drop-in` (animations.css) doubles as the "toast" the design calls for:
+   the badge pops in from above rather than appearing inertly. */
+.trade-invite-badge {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border-radius: var(--radius-sm);
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  animation: drop-in 0.3s ease-out;
+}
+.trade-invite-text {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-strong);
+}
+.trade-invite-text strong { color: var(--yellow); }
+.trade-invite-actions { display: flex; gap: 0.5rem; }
+.trade-invite-actions button { flex: 1 1 0; }
+
+/* ── Overlay shell, shared by the partner picker and the trade panel ──
+   Mirrors .decision-overlay/.decision-modal (overlays.css) so trading reads
+   as the same "modal" language as the rest of the app, without touching
+   that file — trade owns its own copy here. Fixed positioning keeps this an
+   overlay rather than a row in the board's strict 100dvh grid. */
+.trade-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: rgba(0, 0, 0, .6);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  animation: fade-in 0.2s ease-out;
+}
+.trade-modal {
+  width: min(100%, 30rem);
+  max-height: calc(100svh - 2rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 1.6rem 1.7rem;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .6);
+  animation: slide-up 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.trade-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.trade-modal-header h2 { font-size: 1.1rem; color: var(--text-strong); margin: 0; }
+.trade-modal-close {
+  min-width: 0; min-height: unset;
+  width: 2rem; height: 2rem;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, .12);
+}
+
+/* ── Partner picker ── */
+.trade-partner-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.trade-partner-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  text-align: left;
+}
+.trade-partner-option:disabled { cursor: not-allowed; }
+.trade-partner-name { font-weight: 700; color: var(--text-strong); }
+.trade-partner-reason { font-size: 0.72rem; color: var(--text-faint); }
+.trade-empty { color: var(--text-muted); font-size: 0.88rem; }
+
+/* ── Trade panel ──
+   Unlike the partner picker above (still a blocking `.trade-overlay` modal),
+   this floats directly over the board instead of behind a full-screen
+   backdrop: change #1 moved card selection into `.own-hand` at the bottom,
+   so the hand must stay reachable while this is open. Docked to the upper
+   half — well clear of `.self-zone` — so it never sits on top of the hand
+   row it depends on. */
+.trade-panel {
+  position: fixed;
+  top: 3.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-drawer);
+  width: min(92vw, 27rem);
+  max-height: min(56svh, calc(100svh - 8rem));
+}
+.trade-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.trade-panel-title { margin: 0; font-size: 1.15rem; color: var(--text-strong); }
+.trade-slots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+.trade-swap-icon { font-size: 1.4rem; color: var(--teal); flex: 0 0 auto; }
+
+.trade-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.trade-slot-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  max-width: var(--card-w);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The three slot states (a real card, a face-down back, an empty
+   placeholder) all share the card's own footprint so the two sides of the
+   table line up regardless of which state each is in. */
+.trade-slot-card, .trade-slot-empty, .trade-slot-back {
+  width: var(--card-w);
+  height: var(--card-h);
+  flex: 0 0 auto;
+}
+.trade-slot-card { padding: 0; background: none; border: none; }
+.trade-slot-empty {
+  display: grid;
+  place-items: center;
+  padding: 0.5rem;
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--text-faint);
+  border: 1px dashed var(--card-border);
+  border-radius: var(--card-radius);
+  background: rgba(255, 255, 255, 0.03);
+}
+.trade-slot-back {
+  border-radius: var(--card-radius);
+  border: 1px solid rgba(20, 184, 166, .4);
+  background: url('../../assets/cardback-512.webp') center / cover no-repeat;
+}
+
+.trade-status-line { margin: 0; font-size: 0.8rem; color: var(--text-muted); text-align: center; }
+.trade-panel-actions { display: flex; gap: 0.6rem; justify-content: center; }
+
+/* ── Hide/show ──
+   The panel hides itself down to this one fixed chip so the board is fully
+   visible underneath — the session and any placed card live on server-
+   mirrored state untouched, see TradePanel's `isHidden`. Anchored top-left,
+   the one corner nothing else (top-actions) already claims, so it can never
+   be missed or overlap another fixed control. */
+.trade-panel-restore {
+  position: fixed;
+  top: 0.85rem;
+  left: 0.85rem;
+  z-index: var(--z-drawer);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  background: rgba(20, 184, 166, 0.16);
+  border: 1px solid rgba(20, 184, 166, 0.5);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .4);
+  animation: drop-in 0.3s ease-out;
+}
+
+/* ── Placed-card marker in the real hand ──
+   Change #1: the offered card stays in .own-hand (no duplicate strip in the
+   panel). This badge is the only visual cue that a card is currently in the
+   trade slot; clicking the card again is what takes it back out. */
+.own-hand .card-button.trade-placed {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+  border-radius: var(--card-radius);
+  opacity: 0.85;
+}
+.trade-placed-badge {
+  position: absolute;
+  bottom: 0.3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-hover);
+  white-space: nowrap;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #042f2e;
+  background: var(--teal);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .4);
+}
+.trade-hint { border-color: rgba(20, 184, 166, .55); background: rgba(15, 61, 58, .94); color: #99f6e4; }

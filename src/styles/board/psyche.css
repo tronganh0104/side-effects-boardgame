@@ -1,0 +1,184 @@
+/* ── Psyche Tableaus ── */
+.psyche {
+  display: flex;
+  gap: var(--board-gap);
+  /* safe center, not plain center: in a scroll container plain centring lets
+     overflow spill off BOTH edges, and the first slot becomes unreachable
+     (same reasoning as .own-hand, hand.css). */
+  justify-content: safe center;
+  /* --card-w-fit-psyche (layout.css) sizes cards so this row fits at its
+     live slot count, but that fit can be smaller than --card-w-floor —
+     the floor then wins the outer clamp, and the row is left wider than its
+     track. flex-wrap: wrap was the original bug here (four slots wrapping
+     into two visually-interleaved columns, the psyche row's height doubling
+     and pushing the deck row out from under 100dvh); nowrap + scroll is the
+     row's own fallback for that case, matching .own-hand's. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  perspective: 1000px;
+}
+.psyche::-webkit-scrollbar { display: none; }
+.slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0;
+  background: none;
+  border: none;
+  /* fixed track so the badge can never widen the slot */
+  flex: 0 0 var(--slot-w);
+  width: var(--slot-w);
+  min-width: 0;
+  min-height: unset;
+  transition: opacity 0.2s, transform 0.2s;
+  transform-style: preserve-3d;
+}
+.slot.dimmed { opacity: 0.3; pointer-events: none; }
+.slot.target-highlight { opacity: 1; transform: translateY(-4px); z-index: var(--z-hover); }
+.slot.target-highlight > .card-frame-disorder {
+  box-shadow: 0 0 15px rgba(234,179,8,.5);
+  border-color: var(--yellow);
+}
+.slot.anim-pulse-coral { animation: pulse-coral 0.4s ease-out; }
+.slot.anim-pulse-purple { animation: pulse-purple 0.4s ease-out; }
+.slot.anim-pulse-gold { animation: pulse-gold 0.4s ease-out; }
+
+/* font-weight: 900 below is INERT — src/styles/fonts.css self-hosts
+   Cormorant Garamond at weight 600 only and tokens.css sets
+   `font-synthesis-weight: none`, so no weight the browser could fake ever
+   renders (measured: identical glyph widths at 400-900). It stays as a
+   semantic/accessibility marker, same convention as sidebar.css. The
+   actual boldness is `-webkit-text-stroke: currentColor` + `paint-order:
+   stroke fill`, so each modifier's stroke automatically matches its own
+   fill/text colour without repeating the hex twice.
+
+   Sizing: the old max(0.55rem, card-w*0.078) floored at 8.8px on a
+   1366x768 board (card-w ≈ 95px there) — Cormorant's x-height is only
+   0.78x a normal UI font's at the same size, so 8.8px reads far smaller
+   than 8.8px of a normal face, well under legible. 0.8125rem (13px) is a
+   ~48% jump off that floor and stays the floor at every viewport this
+   pass tested (1024x768 through 1920x1080) — 0.1 * card-w only overtakes
+   it above roughly 1560px of card-w.
+
+   What actually constrains this badge's rendered width is NOT this
+   font-size floor, and there is no max-width declared on this rule that
+   caps it directly — the binding constraint is `--slot-w`, the FIXED
+   track `.slot` commits to (layout.css: `calc(var(--card-w) * 1.45)`).
+   `.slot` has no padding/border, so this badge's own `max-width: 100%`
+   resolves to exactly that track's width. Once the badge's natural
+   (padding + text) width exceeds `--slot-w`, `max-width` clips the
+   border-box down to it and `white-space: nowrap` +
+   `text-overflow: ellipsis` fire. Confirmed with a live Playwright
+   measurement of the real "CHƯA ĐIỀU TRỊ" badge (getBoundingClientRect +
+   scrollWidth/clientWidth), not a canvas estimate or an assumed slot
+   size: `--slot-w` (== this badge's clamped clientWidth) measured 114px
+   at 1024x768 and 1280x700, and 120px at 1366x768, while the badge's own
+   unclamped natural width (scrollWidth) measured 122px at all three —
+   2 to 8px of ellipsis, on every player count 2-8. A prior version of
+   this comment claimed the tightest real track was 138.08px at
+   1366x768; that number was stale — it predates later changes to the
+   --card-w fit formula that feeds --slot-w and was never re-verified
+   against the shipped build. Do not trust a track/margin number here
+   without measuring the badge's own clientWidth first.
+
+   Fix: horizontal padding 0.55rem -> 0.35rem and letter-spacing
+   0.06em -> 0.02em. Both shrink the badge's OWN natural width, not the
+   --slot-w track it's measured against, so neither reopens ellipsis risk
+   anywhere else. Re-measured after the change: natural width dropped
+   from 122px to 109px at every one of 1024x768, 1280x700, 1366x768,
+   1600x820 and 1920x1080 — comfortably under the tightest real track
+   (114px, at 1024x768/1280x700) with a verified 5px margin, and no
+   ellipsis at any tested viewport or player count. font-size (the 13px
+   floor above) was left untouched: the padding/letter-spacing cut alone
+   closed the gap, so there was no need to cost more legibility than
+   that. letter-spacing keeps a small positive value (0.02em, not 0) so
+   the caps label still reads as letterspaced, just less aggressively
+   than the original 0.06em, which alone cost ~10px of this 13-character
+   label's own width. */
+/* Vertical footprint trimmed (padding/margin/line-height only — see below):
+   measured contributor to the row-collision budget in layout.css's
+   --card-w-fit-height comment, which treats each psyche row as exactly one
+   card-height tall. The real row is card-h PLUS this badge's own box (it
+   sits above the card in the slot's flex column), so every px shaved here
+   is a px of slack --card-w-fit-height doesn't actually know it has.
+   font-size is deliberately UNTOUCHED: the comment block above this rule
+   already measured 13px (0.8125rem) as the floor that keeps the longer
+   "CHƯA ĐIỀU TRỊ" label legible against Cormorant's shallow x-height —
+   shrinking it would trade that legibility away, and the ellipsis this
+   badge used to show at the tightest tracks (114-120px, see above) was
+   fixed by cutting padding/letter-spacing instead, not font-size.
+   line-height:1 removes the ~10-15% of line-box height a font's default
+   `normal` leading adds above/below the glyphs — pure vertical slack this
+   badge's single line of text never used. padding drops from 0.3rem to
+   0.14rem top/bottom (a real ~9.6px cut at 16px root) and margin-bottom
+   from 0.5x to 0.25x --board-gap. Horizontal padding is a separate,
+   later cut (0.55rem -> 0.35rem, see above) made specifically to close
+   the ellipsis gap against --slot-w, not for vertical space — it has no
+   effect on this badge's height. Measured rendered height before and
+   after both padding cuts: 19.46875px, unchanged, since only horizontal
+   padding and letter-spacing moved. */
+.slot-badge {
+  margin-bottom: calc(var(--board-gap) * 0.25);
+  font-size: max(0.8125rem, calc(var(--card-w) * 0.1));
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-weight: 900;
+  -webkit-text-stroke: 0.4px currentColor;
+  paint-order: stroke fill;
+  padding: 0.14rem 0.35rem;
+  border-radius: 999px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Treated / untreated must stay distinguishable at a glance — this is
+   game-critical state, not decoration — so the two badges differ in BOTH
+   hue and lightness rather than being two shades of one colour:
+     .treated   — the palette's brightest allowed fill (--panel-paper-hi,
+                  #dcc5af, a pale parchment) with dark ink text. Reads as
+                  "clean/resolved", and is the lightest thing the contract
+                  permits, so it visually pops off the dark table.
+     .untreated — the palette's oxblood (--panel-oxblood, #5c2119, a deep
+                  blood-red-brown) with pale ink text. Reads as
+                  "wound/danger". This is the contract's own verified
+                  pairing (#dcc5af on #5c2119 = 7.49:1).
+   So untreated is dark-fill/light-text and treated is light-fill/dark-text
+   — an inverted-value pair, not a hue-only distinction, which also keeps
+   them apart for colour-blind players. Both text pairs clear AAA (11.29:1
+   and 7.50:1 respectively). The chip FILL's own contrast against the dark
+   table background (measured against walnut #261b14 / deep shadow
+   #090603, what's actually behind these slots) is very different between
+   the two states: treated's pale fill is extremely visible (10.12:1 /
+   12.17:1), but untreated's oxblood fill is close in value to the walnut
+   table itself (1.35:1 / 1.62:1) and would nearly vanish as a shape with
+   only its text floating free — the thin tinted border below exists
+   specifically to give that dark chip a visible edge against the dark
+   table without brightening its fill past the contract's ceiling. */
+.slot-badge.treated {
+  color: var(--panel-ink, #1a1006);
+  background: var(--panel-paper-hi, #dcc5af);
+  border: 1px solid rgba(26, 16, 6, 0.35);
+}
+.slot-badge.untreated {
+  color: var(--panel-paper-hi, #dcc5af);
+  background: var(--panel-oxblood, #5c2119);
+  border: 1px solid rgba(220, 197, 175, 0.4);
+}
+
+.drug-attachment {
+  position: absolute;
+  top: calc(var(--card-h) * 0.14);
+  left: 50%;
+  margin: 0;
+  z-index: 3;
+  transform: translateX(-50%);
+  transition: opacity 0.3s;
+  box-shadow: 0 -4px 10px #0004;
+  border-radius: 0.85rem;
+  animation: drop-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.slot:hover .drug-attachment { transform: translateX(-50%); }

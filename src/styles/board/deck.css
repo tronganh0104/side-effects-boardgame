@@ -1,0 +1,166 @@
+/* ── Card Backs ──
+   The artwork gets the card box to itself — no overlay, so its own gold
+   wordmark never has to compete with our text. The label + count used to
+   render as a caption underneath (a plain, un-masked line of text, stacked
+   in `.card-back-wrap`) — that cost a whole extra line of HEIGHT inside
+   .center-zone's minmax(var(--card-back-h), 1fr) track (layout.css), the
+   exact axis the 2-8 player row-collision (that file's --card-w-fit-height
+   comment) is short on. .deck-area has two piles side by side with plenty
+   of WIDTH between them and the board's outer edges, so the caption now
+   sits beside the card instead — see .card-back-caption below.
+   `width` stays exactly --card-back-w (no flex/gap here to add to it): this
+   wrap is what `#deck-draw`'s <button> (GameBoard.tsx) wraps with no
+   padding of its own, so its getBoundingClientRect() IS this box, and
+   GhostLayer's draw-pile flight animation reads that rect verbatim as the
+   ghost's start size, then (overlays.css's `.ghost-card .card-back {
+   width:100%; height:100% }`) stretches the card art to fill it. If this
+   box grew to include the caption's width, the flying card would be
+   stretched into the card+caption box instead of staying the card's own
+   proportions. The caption is `position: absolute` for exactly this
+   reason: it must cost this element nothing in layout size. */
+.card-back-wrap {
+  width: var(--card-back-w);
+  position: relative;
+}
+/* The teal outline (rgba(20,184,166,.4)) fought the artwork's own gold
+   wordmark instead of framing it — teal appears nowhere in the walnut
+   apothecary background (the artwork's only teal-ish pixel, #2e3e3e, is
+   desaturated and dark, nothing like teal-500). Brass frames gold the way
+   a real frame would; `position: relative` below stays — the stack
+   pseudo-elements (::before/::after) are positioned relative to it — but
+   it must NOT also carry a `z-index` value.
+   TRAP: an element that has both `position` and a `z-index` other than
+   `auto` becomes a stacking-context root. Painting order inside a
+   stacking-context root puts the root's OWN background/border first,
+   THEN its negative-z-index children on top of that — the opposite of
+   what "negative z-index = behind" sounds like it should do. So giving
+   `.card-back` a `z-index` here makes ::before/::after (z-index: -1)
+   paint OVER its background instead of behind it, hiding the artwork.
+   Leaving `z-index` as `auto` keeps `.card-back` out of the stacking-
+   context business entirely, so the negative-z pseudo-elements escape to
+   the nearest ancestor stacking context (`.draw-pile`/`.discard-pile`,
+   layout.css — `position: relative` + `z-index: var(--z-base)`), get
+   painted early there (right after that ancestor's own, empty,
+   background), and then `.card-back`'s own background paints on top of
+   them afterwards — which is what makes the offset edges peek out from
+   behind the top card instead of drawing over it. Do not re-add
+   `z-index` to `.card-back` to "fix" some future stacking complaint;
+   if the pseudo-elements ever need reordering, prefer restyling them
+   with `box-shadow` offsets on `.card-back` instead, which needs no
+   stacking context at all. */
+.card-back {
+  width: var(--card-back-w); height: var(--card-back-h);
+  border-radius: var(--card-radius);
+  position: relative;
+  border: 1px solid var(--panel-brass, #76512f);
+  box-shadow: 0 3px 8px rgba(9, 6, 3, 0.55);
+  background: url('../../assets/cardback-512.webp') center / cover no-repeat;
+}
+/* Stack illusion: two flat card-edges peeking out behind the top card,
+   so a 73-card pile reads as a pile instead of one flat card. Kept
+   subtle on purpose (this sits behind the play area, not in the hand):
+   small percentage offsets (translate() on a positioned element is
+   relative to ITS OWN box, so this scales with --card-back-w/h for free,
+   no separate calc needed) and dark, low-saturation fills — mid wood and
+   walnut, one step and two steps down in value from the top card's own
+   brass frame — rather than another artwork repeat or a bright colour
+   that would out-compete the hand. `content: ''` + `inset: 0` +
+   `border-radius: inherit` match the top card's own box exactly before
+   the transform offsets it. */
+.card-back::before,
+.card-back::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid var(--panel-brass, #76512f);
+  z-index: -1;
+}
+.card-back::before {
+  background: var(--panel-ink-2, #261b14);
+  transform: translate(5%, 6%);
+}
+.card-back::after {
+  background: var(--panel-ink, #1a1006);
+  transform: translate(9%, 11%);
+}
+/* Discard starts and can return to 0 cards — the old markup rendered a
+   full card back (artwork, brass frame, stack illusion) captioned
+   "SIDE EFFECT 0", i.e. a "full" pile that claims to hold nothing.
+   CardBack.tsx now adds `.card-back--empty` when count === 0 (see that
+   file's comment); style it here as a plainly empty slot: no artwork, no
+   stack, a dashed brass-toned outline like an empty tray. `background`
+   and `box-shadow` are longhand-overridden (not re-declared as
+   shorthand) so this rule only ever has to say what changes for the
+   empty state, not restate the base rule. */
+.card-back--empty {
+  background-image: none;
+  background-color: var(--panel-ink-2, #261b14);
+  border: 1px dashed rgba(220, 197, 175, 0.35);
+  box-shadow: inset 0 2px 6px rgba(9, 6, 3, 0.5);
+}
+.card-back--empty::before,
+.card-back--empty::after {
+  content: none;
+}
+/* Beside the card, not centred under it (see .card-back-wrap above for why
+   height is the scarce axis here). Anchored with `left: 100%` of the wrap's
+   own box (== the card's right edge) rather than a flex sibling, so it
+   costs the wrap zero width/height of its own.
+   Side is deliberately OUTWARD per pile, not the same side for both: draw
+   sits left of discard in .deck-area (GameBoard.tsx), with only
+   `gap: clamp(1rem, 4vw, 4rem)` (layout.css) between them — 16-64px,
+   frequently narrower than this caption's own natural width. Defaulting
+   every `.card-back-caption` to the right (discard's outward side) and
+   flipping it to the left specifically inside `.draw-pile` (below) means
+   both captions read away from that gap and can never land on top of the
+   other pile. GhostLayer's ghost (not inside .draw-pile/.discard-pile)
+   falls through to this default — harmless, it's a ~500ms flight with the
+   caption fading with the rest of the ghost, not a static layout. */
+.card-back-caption {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%);
+  margin-left: calc(var(--card-back-w) * 0.16);
+  display: grid;
+  justify-items: start;
+  gap: calc(var(--card-back-w) * 0.06);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.draw-pile .card-back-caption {
+  left: auto;
+  right: 100%;
+  margin-left: 0;
+  margin-right: calc(var(--card-back-w) * 0.16);
+  justify-items: end;
+}
+/* font-weight: 900 is INERT (see psyche.css's file-top note — same
+   self-hosted single-weight face, same font-synthesis-weight: none). Kept
+   as a semantic marker; the actual emphasis is the stroke below. Also
+   brought both lines into the walnut/parchment palette instead of the
+   slate/near-white pair that belonged to the old navy theme — but unlike
+   a chip's fill+text pair, this caption sits directly on the dark table
+   (deck-area's own dark radial-gradient backdrop, layout.css), not on a
+   light surface, so both colours below are the PALE end of the palette,
+   never --panel-ink: --panel-paper-tint (parchment, muted secondary,
+   4.90:1 against the walnut table / 5.89:1 against deep shadow) for the
+   label, --panel-paper-hi (the brightest allowed, 10.12:1 / 12.17:1) for
+   the count — same muted-label / prominent-value hierarchy the old
+   slate/near-white pair had, just re-toned. */
+.card-back-caption small {
+  font-size: max(0.5rem, calc(var(--card-back-w) * 0.093));
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--panel-paper-tint, #9e8769);
+  -webkit-text-stroke: 0.25px currentColor;
+  paint-order: stroke fill;
+}
+.card-back-caption strong {
+  font-size: max(0.9rem, calc(var(--card-back-w) * 0.19));
+  color: var(--panel-paper-hi, #dcc5af);
+  -webkit-text-stroke: 0.4px currentColor;
+  paint-order: stroke fill;
+}

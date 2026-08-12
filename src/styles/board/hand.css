@@ -1,0 +1,180 @@
+/* ── Hand & Controls ── */
+.hand-and-controls {
+  display: grid;
+  grid-template-columns: var(--controls-space) minmax(0, 1fr) var(--controls-space);
+  align-items: end;
+  width: 100%;
+  position: relative;
+}
+.own-hand {
+  position: relative;
+  z-index: var(--z-hover);
+  grid-column: 2;
+  display: flex;
+  /* safe center (not plain center): in a scroll container, plain centring
+     makes overflow spill off BOTH edges and the first card becomes
+     unreachable. */
+  justify-content: safe center;
+  /* Unconditional (no media query), so this is desktop's safety net too, not
+     just mobile's: online mode's third grid column (.has-chat, see
+     layout.css) leaves less width for the hand, and a seven-card hand
+     (HAND_LIMIT is 6, but a hand holds up to 7 mid-turn before the forced
+     discard) can outgrow it even at common desktop sizes. Overflow degrades
+     into a scroll instead of breaking the layout, and cards keep a legible
+     size. The mobile block in responsive.css only retunes snap/padding for
+     touch on top of this — it does not need to re-establish the scroll. */
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* overflow-x:auto forces overflow-y to auto too, which would clip the
+     selected card's lift. Reserve the lift inside the scroll box and cancel
+     it again in layout so the board's height budget is unchanged. */
+  padding-top: calc(var(--card-h) * 0.3);
+  margin-top: calc(var(--card-h) * -0.3);
+}
+.own-hand::-webkit-scrollbar { display: none; }
+/* The hand used to carry its own live-count fit here, overriding --card-w
+   (and re-deriving --card-h/--card-radius/the font tokens/--hand-gap on top
+   of it, because a custom property resolves its own var()s where it's
+   declared and a descendant that doesn't redeclare it just inherits the
+   frozen number). --card-w is now fit to BOTH this row and .psyche's live
+   counts in one place, on .game-board itself (layout.css's
+   --card-w-fit-hand, in the same `min-width: 801px` block this override used
+   to be scoped to) — so nothing downstream of it is ever stale, and this
+   whole block is gone rather than fixed. */
+.own-hand .cards {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--hand-gap);
+  padding: 0.5rem 0.5rem 0;
+  justify-content: safe center;
+  min-width: min-content;
+  perspective: 1000px;
+}
+.own-hand .card-button {
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), margin 0.2s, opacity 0.2s;
+  position: relative;
+}
+.own-hand .card-button.selected {
+  transform: translateY(calc(var(--card-h) * -0.26));
+  z-index: calc(var(--z-selected) + 1);
+  box-shadow: 0 0 0 4px var(--teal), 0 14px 22px #0009;
+}
+/* Shared visual base for both the hand-anchored hint (.hand-selection-hint,
+   below) and the trade hint (trade.css's .trade-hint, still rendered as a
+   child of .deck-area in GameBoard.tsx). The position set here (position/
+   bottom/left/transform) is only the trade hint's now: it fires with NO
+   card selected (asking the player to pick one for the trade), so it has
+   nothing to anchor above and keeps the original centring against
+   .deck-area (layout.css's position:relative there). .hand-selection-hint
+   below overrides position/bottom/left/top/transform wholesale for the
+   anchored variant, which is portaled to document.body and positioned with
+   plain px left/top written by SelectionHint.tsx — same specificity as
+   this rule (one class each), so source order (declared after) decides,
+   not the other way around. */
+.selection-hint {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  /* --hint-gap, not a bare length: a local token so the mobile override
+     below can retune it without repeating this whole transform. */
+  transform: translate(-50%, calc(-1 * var(--hint-gap, 0.2rem)));
+  z-index: var(--z-selected);
+  /* width:max-content, not the auto default — with only `left` (not `right`)
+     set, a fixed box with width:auto shrink-to-fits against the space to the
+     RIGHT of that left offset only (half the viewport, here), not against
+     max-width, so it wrapped far tighter than max-width allowed and asymmetric-
+     ally besides. width:max-content sizes from the content instead and lets
+     max-width do the only capping, which is what centering via
+     transform:translateX(-50%) assumes. */
+  width: max-content;
+  /* Long enough for the wordier per-card-type hints to stay on one line at
+     desktop widths, capped so it can never reach the sidebars; below that it
+     wraps (no white-space:nowrap) rather than spilling past max-width. */
+  max-width: min(90vw, 32rem);
+  text-align: center;
+  line-height: 1.15;
+  padding: 0.12rem 0.4rem;
+  border: 1px solid rgba(234, 179, 8, 0.55);
+  border-radius: 999px;
+  background: rgba(66, 46, 4, 0.94);
+  color: #fde68a;
+  /* 0.52rem measured tiny even before accounting for the typeface: Cormorant
+     Garamond's x-height is 39/100 versus Segoe UI's 50/100 (measured), so
+     0.52rem here reads ~22% smaller than the same number would in a normal
+     sans face. 0.85rem is a ~63% jump — sized to be comfortably readable at
+     a glance (this is the pill telling the player which target/rule applies
+     to their current selection) while still fitting the portal's own
+     viewport clamp (SelectionHint.tsx measures this box's real rendered
+     width/height every time and re-centers/re-tops it against
+     window.innerWidth/innerHeight, so growth here is a measured input to
+     that clamp, not a fixed guess it could outgrow). */
+  font-size: 0.85rem;
+}
+/* Anchored to the selected card, not .deck-area: the drug/disorder/therapy/
+   episode hints always have a selected card in the hand to point at, so
+   they anchor to that card specifically instead of centring over the deck.
+   Rendered through a React portal into document.body (SelectionHint.tsx),
+   NOT as a child of .own-hand, so `position: fixed` here resolves against
+   the viewport rather than .own-hand's scrollable content box. That matters
+   because .own-hand has overflow-x:auto, which forces overflow-y:auto too —
+   anything positioned above .own-hand's own padding-top edge sits in
+   territory a scroll container can never reach (scrollTop can't go
+   negative), so a non-portaled hint anchored above the hand row would be
+   permanently clipped no matter how much padding-top .own-hand reserves.
+   `left`/`top` are plain px, written by SelectionHint.tsx from
+   getBoundingClientRect() measurements taken in viewport coordinates and
+   clamped against window.innerWidth/innerHeight (not against .own-hand's
+   own — much narrower — width, which is what the old CSS clamp() did and
+   is why the hint used to land 100px+ off-centre from the card). No
+   clamp()/translate(-50%) here any more: JS already computes the hint's
+   final top-left corner, so the base rule's centring transform and
+   percentage anchor would only double-offset it. */
+.hand-selection-hint {
+  position: fixed;
+  bottom: auto;
+  transform: none;
+  z-index: var(--z-drawer);
+}
+
+/* The right gutter (--controls-space) is narrower than the two buttons
+   side by side, so a vertical stack is the deliberate shape here, not an
+   accidental wrap: it lets the gutter stay narrow and leave the hand its
+   width instead of widening the gutter to fit a row. */
+.controls-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  z-index: var(--z-selected);
+  padding-bottom: 0.5rem;
+  grid-column: 3;
+  justify-self: end;
+  align-self: end;
+}
+.utility-btn { min-height: 2.35rem; padding: 0.45rem 0.75rem; font-size: 0.78rem; }
+.top-actions {
+  position: fixed;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: var(--z-drawer);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: 7rem;
+}
+.top-action-btn { min-height: 2.2rem; padding: 0.4rem 0.55rem; font-size: 0.72rem; }
+.top-action-icon { align-self: flex-end; }
+.top-actions .audio-settings { align-self: flex-end; }
+.top-actions .audio-popover { top: calc(100% + 0.5rem) !important; bottom: auto !important; }
+.apply-card-btn { display: block; margin: 0 auto 0.6rem; font-size: 0.8rem; }
+.action-btn { min-width: 8rem; }
+.log-icon-btn {
+  min-width: 0; min-height: unset;
+  width: 2.7rem; height: 2.7rem;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 1.2rem;
+}

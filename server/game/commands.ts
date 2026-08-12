@@ -16,3 +16,10 @@ export type GameCommand =
   | { type: 'discard'; cardInstanceId: string }
   | { type: 'discardManual'; cardInstanceId: string }
   | { type: 'endTurn' }
+  | {
+      type: 'tradeCards'
+      initiatorPlayerId: string
+      initiatorCardId: string
+      partnerPlayerId: string
+      partnerCardId: string
+    }

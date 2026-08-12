@@ -33,5 +33,15 @@ export function deserializeRoom(snapshot: PersistedRoomSnapshot): Room {
       connected: false,
       socketId: undefined,
     })),
+    gameState: room.gameState
+      ? {
+          ...room.gameState,
+          players: room.gameState.players.map((player) => ({
+            ...player,
+            // Rows persisted before trading was added lack this field.
+            tradeUsedThisTurn: player.tradeUsedThisTurn ?? false,
+          })),
+        }
+      : room.gameState,
   }
 }

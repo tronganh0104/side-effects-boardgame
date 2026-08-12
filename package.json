@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n client,server -c cyan,magenta -k \"npm:dev:client\" \"npm:dev:server\"",
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
     "build:server": "tsc -p tsconfig.server.json && node -e \"require('node:fs').writeFileSync('dist-server/package.json', '{\\\"type\\\":\\\"commonjs\\\"}')\"",
@@ -28,6 +28,7 @@
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "concurrently": "^10.0.4",
     "eslint": "latest",
     "eslint-config-prettier": "latest",
     "globals": "latest",

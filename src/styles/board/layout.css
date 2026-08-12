@@ -1,0 +1,469 @@
+/* ============================================================
+   GAME BOARD
+   ============================================================ */
+
+.game-board {
+  width: 100%;
+  /* Height must be definite (not min-height/auto), or the 1fr row below
+     resolves against max-content instead of leftover space. Deliberately no
+     overflow:hidden here — clipping would hide a layout regression instead of
+     showing it. */
+  height: 100dvh;
+
+  /* ── The single card-size knob, computed once, right here ──
+     .game-board is the lowest common ancestor of every card on the board
+     (deck, both players' psyche rows, both hands) AND the element React
+     stamps --hand-count/--slot-count onto (GameBoard.tsx) — :root can't see
+     those (it's an ancestor), so --card-w has to live here, not in
+     tokens.css. Below 801px this reduces to the viewport/height cap alone:
+     the fit formula added in the media query further down assumes the
+     .player/.hand-and-controls side-gutter grid (--controls-space) and the
+     .player-sidebar/.chat-sidebar columns, none of which exist below 801px
+     (responsive.css switches them to plain flex columns and hides the
+     sidebars) — subtracting gutters that aren't there would starve the
+     cards for no reason on a phone, which is already width-bound and
+     deliberately scrolls instead (see .own-hand, hand.css). */
+  --card-w: clamp(var(--card-w-floor), var(--card-w-cap), var(--card-w-ceiling));
+
+  /* Everything below derives from --card-w alone, ON THIS ELEMENT — a media
+     query only ever needs to redeclare --card-w (or, for the odd case, one
+     of these) and the rest recomputes automatically, because calc() re-reads
+     var(--card-w) from .game-board's own current value every time, not a
+     frozen number inherited from somewhere else. That "frozen number" is
+     exactly the bug this file used to have via hand.css's .own-hand override
+     (deleted — see hand.css) and is why every one of these lives here now
+     instead of being spread across the files that consume them. */
+  --card-h:       calc(var(--card-w) * var(--card-ratio));
+  --card-radius:  max(0.5rem, calc(var(--card-w) * 0.1));
+  --slot-w:       calc(var(--card-w) * 1.45);         /* card plus room for the drug overlay */
+  --hand-gap:     clamp(0.3rem, calc(var(--card-w) * 0.08), 1rem);
+  --card-back-w:  calc(var(--card-w) * 0.82);
+  --card-back-h:  calc(var(--card-back-w) * 1.4);
+  /* Opponent's face-down hand (opponent-hand.css) — that file's own :root
+     default (declared before this refactor, out of scope to edit here) reads
+     var(--card-w) too, and :root can no longer see it, so it would resolve
+     to nothing for every viewport responsive.css doesn't already override.
+     Redeclaring the same default here, on .game-board, is what makes it
+     resolve correctly again — the nearer ancestor's value wins over :root's
+     for any descendant (.facedown-card) that doesn't set its own. */
+  --facedown-w:   calc(var(--card-w) * 0.72);
+  --facedown-h:   calc(var(--facedown-w) * var(--card-ratio));
+
+  display: grid;
+  /* Row 1 takes exactly what the opponent zone needs (its content is bounded:
+     one row of cards plus an optional avatar bar), row 2 is the deck, and the
+     self zone absorbs whatever is left. Everything scales with --card-w. */
+  /* Both player rows size to their content and the DECK row absorbs the slack.
+     The reverse (deck fixed, self zone 1fr) breaks as soon as a row grows: the
+     self zone is justify-content:flex-end, so once its content exceeds 1fr it
+     overflows upward and the nameplate lands on top of the deck. */
+  grid-template-rows:
+    auto
+    minmax(var(--card-back-h), 1fr)
+    auto;
+  /* Sidebar column plus the board column; the sidebar spans all three rows
+     (see .player-sidebar below) while opponent/center/self stay in column 2.
+     Online mode adds a third column (see .has-chat below); local mode has no
+     peers to chat with, so this two-column shape stays the default. */
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  background: transparent;
+  box-shadow: inset 0 0 100px #000a;
+  position: relative;
+  z-index: 1;
+}
+/* --chat-w defaults to --sidebar-w (see chat.css) so the two wings are
+   symmetric out of the box; .chat-collapsed there overrides it to a narrow
+   rail without touching this rule.
+   Scoped to the same 801px floor responsive.css's mobile block uses below —
+   media queries carry no specificity of their own, so an unconditional
+   two-class rule like this one (0,2,0) silently outranks `.game-board`'s
+   single-class mobile override (0,1,0) no matter which media query either
+   sits in, collapsing the middle column to 0 on phones. Fixing this by
+   narrowing the rule's scope, rather than by raising specificity on the
+   mobile side (or reaching for !important), is deliberate: matching
+   specificity upward is the arms race that produced this bug, and the next
+   rule added to either file would walk straight into it again. */
+@media (min-width: 801px) {
+  .game-board.has-chat {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--chat-w);
+  }
+}
+
+/* ── Fit --card-w to what the board column actually has, not just the
+   viewport ──
+   Below 801px .player/.hand-and-controls drop --controls-space's side-gutter
+   grid for a plain flex column and the sidebars are display:none
+   (responsive.css), so the subtraction below would describe a layout that
+   doesn't exist there — same reason hand.css's old override was scoped to
+   this exact breakpoint. Above it, both rows sit inside the same middle grid
+   column: .opponent-zone/.self-zone (padding: --zone-pad) contain .player,
+   whose own grid-template-columns is --controls-space / 1fr / --controls-space
+   (layout.css .player rule) — .hand-and-controls repeats that same shape.
+   So one width, --board-avail-w, is what both rows' middle column actually
+   gets: the viewport minus both sidebars and both gutters. */
+@media (min-width: 801px) {
+  .game-board {
+    --board-avail-w: calc(
+      100vw - var(--sidebar-w) - var(--chat-w) -
+      (var(--controls-space) * 2) - (var(--zone-pad) * 2)
+    );
+    /* Hand row demand: N cards at card_w plus (N-1) gaps at --hand-gap
+       (tokens.css: clamp(0.3rem, card_w*0.08, 1rem)) — at the widths this fit
+       resolves to, that clamp sits on its middle branch, so gap ≈ 0.08·w and
+         demand = N·w + (N-1)·0.08w = w·(1.08N − 0.08)
+       plus .own-hand .cards's own 1rem horizontal padding (hand.css), which
+       is a flat width cost specific to that row's markup, not part of
+       --board-avail-w (psyche has no equivalent). Solving demand = avail − 1rem
+       for w gives the fit below. a = 1.08N − 0.08, b = 1rem. */
+    --card-w-fit-hand: calc(
+      (var(--board-avail-w) - 1rem) / (1.08 * var(--hand-count, 6) - 0.08)
+    );
+    /* Psyche row demand: N slots at --slot-w (card_w * 1.45) plus (N-1) gaps
+       at --board-gap — an ABSOLUTE length, unlike the hand's proportional
+       gap, so it's a flat cost rather than folding into the coefficient:
+         demand = 1.45N·w + (N-1)·board-gap
+       Solving demand = avail for w: a = 1.45N, b = (N-1)·board-gap. N is the
+       larger of the two psyche rows actually on screen (viewer + focused
+       opponent — GameBoard.tsx sets --slot-count from live state, since slot
+       counts grow during play and a hardcoded max would under- or
+       over-shrink depending which side of it the real game is on). */
+    --card-w-fit-psyche: calc(
+      (var(--board-avail-w) - (var(--slot-count, 4) - 1) * var(--board-gap))
+      / (1.45 * var(--slot-count, 4))
+    );
+    /* ── Vertical fit: what --card-w-cap's flat vh term (tokens.css) forgot ──
+       Measured with a real browser (getBoundingClientRect) at 1920x1080: going
+       from 2 players (no avatar bar, OpponentAvatarBar only renders once
+       GameBoard.tsx's `opponents.length > 1`) to 3+ players (bar renders)
+       shifted .psyche's top in .opponent-zone down 66px while its own height
+       stayed put (234px both times) — the bar's real footprint — but
+       .deck-area's top only moved down 28px, a 38px shortfall, and
+       .psyche/.deck-area then measured overlapping by that same ~39px at
+       1920x1080 (44px at 1873x938, 30px at 1366x768: worse on shorter/narrower
+       screens, better on taller/wider ones — a vertical-budget problem, not a
+       fixed number of px). Root cause: this file's three grid rows are `auto /
+       minmax(var(--card-back-h), 1fr) / auto` (below) — row 2's minimum is a
+       hard floor the track-sizing algorithm honours before anything else, so
+       once the avatar bar makes .opponent-zone's (row 1) content taller than
+       the row's remaining share, row 1's OWN track undershoots that content
+       (`min-height: 0` + `overflow: hidden` there let the track shrink below
+       it instead of the reverse) while .center-zone (row 2) keeps painting
+       its un-clipped deck at its full, unshrunk card-back-h — hence the
+       visual overlap sits at the row 1/row 2 boundary, not inside either
+       zone's own layout. --card-w-cap (tokens.css) has always been a flat
+       `min(9vw, 12.4vh)` guess at how much vertical room three stacked rows
+       leave per unit of card width; it has no term for --zone-chrome (the
+       token already named for exactly this — "badges, nameplate, avatar bar"
+       — but never wired into any formula before now), so it stayed the same
+       size whether or not the bar was actually there. This fixes that: solve
+       for the card-w at which the FULL worst-case vertical demand (avatar bar
+       present — the fit can't see live player count, so it always budgets for
+       it, same as 3-player and 8-player render identically once the bar
+       exists) equals the board's own height (100vh; .game-board sets height:
+       100dvh at this breakpoint, online mode's connection-status bar aside —
+       same simplification --card-w-cap already made).
+         demand = 2×(2×zone-pad + zone-chrome) [opponent-zone + self-zone
+                    padding+chrome, one avatar-bar-or-hud-glass allowance each]
+                  + 3×board-gap [opponent-zone's avatar-bar↔player gap, plus
+                    self-zone's hud-glass↔player and player↔hand-and-controls
+                    gaps]
+                  + 3×card-h [opponent psyche row + self psyche row + own-hand
+                    row, all one card-height tall]
+                  + card-back-h [deck row, card-w×0.82×1.4 — same literals as
+                    --card-back-w/--card-back-h below, inlined here because
+                    those two vars are themselves derived FROM --card-w and
+                    can't feed back into one of --card-w's own inputs]
+       Solving demand = 100vh for card-w: */
+    /* ADDENDUM — this formula still left a real, if small, shortfall: a
+       fresh getBoundingClientRect() pass at 1920x1080/8p after the fix
+       above measured .opponent-zone's own box ending at 463.14px while its
+       child `.player` laid out to 470.88px — a 7.7px overlap, silently
+       absorbed by .opponent-zone's `overflow: hidden` (a cropped
+       screenshot confirmed no visible clipping or artifact at that size,
+       but the assertion this fix exists to satisfy — rect overlap <= 0 —
+       can't rely on that; it gets worse on shorter/narrower screens the
+       same way the original 39px did). Root cause: the demand model above
+       treats the opponent psyche row as exactly one card-height and never
+       accounts for two things that are ALWAYS in `.player` alongside it:
+         1. The watched opponent's face-down hand (.opponent-hand,
+            opponent-hand.css) — unconditionally rendered whenever a
+            focused opponent exists (GameBoard.tsx; unlike the avatar bar
+            it is NOT gated behind opponents.length), stacked ABOVE the
+            psyche row inside the same `.player` grid (both grid-column: 2,
+            auto-placed into separate rows — confirmed by measuring
+            `.opponent-hand` at 144.625px against a probed --facedown-h of
+            the same value, at card-w=133.906). Cost: --facedown-h
+            (card-w×0.72×card-ratio) + its own margin-bottom (0.75×
+            board-gap, opponent-hand.css) + one more `.player` row-gap
+            (board-gap) to the psyche row below it.
+         2. `.slot-badge` (psyche.css) sits ABOVE the card inside each slot,
+            so a psyche row's real height is card-h PLUS the badge's own
+            box. Measured at card-w=133.906: a slot's total height
+            (223.703) minus card-h (200.859) = 22.84px of badge, which
+            decomposes into margin-bottom (0.25×board-gap, psyche.css,
+            post-shrink), padding (2×0.14rem = 4.48px flat — rem is
+            root-relative, not card-w-relative), a 1px top+bottom border
+            (2px — both `.treated`/`.untreated` set `border: 1px solid`),
+            and the badge's own line-height. Line-height can't be inlined
+            as a card-w multiple — the SAME var(--card-w) circularity the
+            comment above already flags for --card-back-h applies here, and
+            the badge's font-size is `max(0.8125rem, card-w×0.1)` — but it
+            CAN safely reference var(--card-w-cap) (tokens.css; depends on
+            nothing this file computes, so never circular) as a stand-in
+            upper bound for the eventual card-w, giving LH below. Two
+            badges count (opponent + self psyche rows); --own-hand has
+            none. Re-solving demand = 100vh with both terms added: */
+    --card-w-fit-height: calc(
+      (100vh - 4 * var(--zone-pad) - 2 * var(--zone-chrome) - 5.25 * var(--board-gap)
+        - 12.96px - 2 * max(0.8125rem, calc(var(--card-w-cap) * 0.1)))
+      / (3 * var(--card-ratio) + 0.82 * 1.4 + 0.72 * var(--card-ratio))
+    );
+    /* The knob: smallest of the viewport/height cap and all three rows' fits,
+       never below the legibility floor, never above the flat ceiling. If the
+       floor wins here, a row's own fit could still be smaller than the
+       floor it was just clamped up to — that row is then wider (or taller)
+       than its track and must scroll (its own overflow-x:auto), not wrap: see
+       .psyche/.own-hand for the fallback each row degrades to. */
+    --card-w: clamp(
+      var(--card-w-floor),
+      min(var(--card-w-cap), var(--card-w-fit-hand), var(--card-w-fit-psyche), var(--card-w-fit-height)),
+      var(--card-w-ceiling)
+    );
+  }
+}
+
+.game-board.interaction-locked { pointer-events: none; }
+.game-board.targeting-mode .opponent-zone,
+.game-board.targeting-mode .self-zone { background: rgba(0,0,0,.15); transition: background 0.2s; }
+
+/* Sidebar spans all three board rows in column 1; the board content
+   (opponent/center/self) lives in column 2. The chat sidebar (only present
+   with .has-chat) mirrors it from column 3; its visual treatment lives in
+   chat.css, same split as .player-sidebar/sidebar.css. */
+.player-sidebar { grid-column: 1; grid-row: 1 / -1; }
+.chat-sidebar { grid-column: 3; grid-row: 1 / -1; }
+.opponent-zone,
+.center-zone,
+.self-zone { grid-column: 2; }
+
+/* connection status bar */
+.connection-status {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding: 0.4rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--teal);
+  background: rgba(2,6,23,.7);
+  border-bottom: 1px solid var(--card-border);
+  backdrop-filter: blur(10px);
+}
+
+/* Online mode wraps .game-board with this status bar as a sibling (see
+   OnlineLobby), so .game-board's own 100dvh would grow the wrapper to
+   status-bar-height + 100dvh and push the bottom of the page off-screen.
+   The wrapper takes over ownership of the viewport height instead, and
+   .game-board falls back to auto + flex:1 so it still resolves to a
+   definite height (the leftover space after the status bar) — the grid's
+   1fr row needs that same definite-height guarantee described above. */
+.online-game {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.online-game > .game-board {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ── Opponent Zone ── */
+.opponent-zone {
+  padding: var(--zone-pad);
+  display: flex;
+  flex-direction: column;
+  gap: var(--board-gap);
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+}
+.opponent-avatar-bar {
+  display: flex;
+  /* Never shrink: the zone is a flex column with overflow:hidden, so a
+     squeezed bar is not a smaller bar, it is a clipped one. */
+  flex: 0 0 auto;
+  gap: 0.8rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 0.5rem;
+  justify-content: flex-start;
+  scroll-snap-type: x mandatory;
+}
+.opponent-avatar-bar::-webkit-scrollbar { display: none; }
+
+.opponent-avatar {
+  scroll-snap-align: center;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(6, 20, 18, 0.75);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(4px);
+  border-radius: 999px;
+  padding: 0.4rem 1rem 0.4rem 0.4rem;
+  transition: all 0.2s;
+}
+/* Watched (focused) reads louder than current-turn below: both use teal, so
+   the watched player gets a solid ring the turn glow does not have. */
+.opponent-avatar.focused {
+  border-color: var(--teal);
+  background: rgba(19, 51, 46, 0.95);
+  box-shadow: 0 0 0 2px var(--teal), 0 0 18px rgba(20,184,166,.45);
+}
+.opponent-avatar.focused .avatar-icon { box-shadow: 0 0 0 2px rgba(226,232,240,.35); }
+.avatar-watching-dot { font-size: 0.8rem; line-height: 1; margin-right: -0.2rem; }
+.opponent-avatar.targeted {
+  border-color: var(--yellow);
+  box-shadow: 0 0 15px rgba(234,179,8,.5);
+}
+.opponent-avatar.current-turn {
+  box-shadow: 0 0 15px rgba(20,184,166,.35);
+  border-color: var(--teal);
+}
+.avatar-icon {
+  display: grid;
+  place-items: center;
+  width: 2rem; height: 2rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+  color: #02171a;
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+.avatar-info { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
+.avatar-info strong { font-size: 0.9rem; color: var(--text-strong); }
+.avatar-info small { font-size: 0.7rem; color: var(--text-muted); }
+.avatar-effects { display: flex; gap: 0.2rem; font-size: 0.8rem; }
+
+/* ── Player rows ──
+   Same three-column shape as .hand-and-controls: name in the left gutter,
+   cards centred in the middle. The name then costs no row of its own, and the
+   left gutter — until now empty purely for symmetry — carries it.
+   Name only, no hand count: the avatar bar already shows the count and the
+   face-down hand spells it out card for card.
+   No frame on the article itself either: it is block-level, so a border
+   stretches the full zone width into a box that reads as a container rather
+   than a highlight. */
+.player {
+  display: grid;
+  grid-template-columns: var(--controls-space) minmax(0, 1fr) var(--controls-space);
+  align-items: start;
+  row-gap: var(--board-gap);
+  column-gap: 0.5rem;
+  width: 100%;
+}
+.player > .psyche,
+.player > .opponent-hand,
+.player > .apply-card-btn { grid-column: 2; }
+
+.opponent-header,
+.own-nameplate {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  margin: 0;
+  text-align: left;
+  font-size: 0.85rem;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+.opponent-header strong { color: var(--text-strong); }
+
+/* ── Center Zone ── */
+.center-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--zone-pad);
+  background: radial-gradient(ellipse at center, rgba(10,31,27,.5), transparent 70%);
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+}
+.deck-area {
+  display: flex;
+  gap: clamp(1rem, 4vw, 4rem);
+  justify-content: center;
+  align-items: center;
+  perspective: 1000px;
+  /* Containing block for the trade hint only now (.selection-hint.trade-hint,
+     GameBoard.tsx) — the drug/disorder/therapy/episode hints moved to
+     .own-hand (hand.css's .hand-selection-hint) since they anchor to the
+     selected card, not the deck. The trade hint still needs this: it shows
+     with no card selected, so .deck-area's centred position is still the
+     only sensible anchor for it. The hint is absolutely positioned, so this
+     doesn't change .draw-pile/.discard-pile's own layout or hover
+     transforms — they aren't positioned and don't participate in a
+     containing-block relationship with it. */
+  position: relative;
+}
+.draw-pile {
+  position: relative;
+  box-shadow: -2px 2px 0 #05100f, -4px 4px 0 #102926, -6px 6px 0 #05100f, -8px 8px 0 #102926, -10px 10px 15px #0008;
+  transform: rotateX(10deg) rotateZ(-2deg);
+  transition: transform 0.2s, box-shadow 0.2s;
+  border-radius: 0.6rem;
+  z-index: var(--z-base);
+  border: none;
+  background: none;
+  min-height: unset;
+  padding: 0;
+}
+.draw-pile:hover:not(:disabled) {
+  transform: rotateX(10deg) rotateZ(-2deg) translateY(-5px);
+  box-shadow: -2px 2px 0 #05100f, -4px 4px 0 #102926, -6px 6px 0 #05100f, -8px 8px 0 #102926, -15px 15px 25px #000a;
+}
+.draw-pile:active:not(:disabled) { transform: rotateX(10deg) rotateZ(-2deg) translateY(2px); transition: 0.05s; }
+.discard-pile {
+  box-shadow: 0 4px 12px #0008;
+  transform: rotateX(5deg) rotateZ(3deg);
+  opacity: 0.9;
+  border-radius: 0.6rem;
+  transition: transform 0.2s;
+  z-index: var(--z-base);
+}
+
+/* ── Self Zone ── */
+.self-zone {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding: var(--zone-pad);
+  gap: var(--board-gap);
+  min-height: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.hud-glass {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.4rem 1rem;
+  background: rgba(11, 32, 30, 0.92);
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+  backdrop-filter: blur(4px);
+  transition: color 0.3s;
+}
+.hud-glass strong { color: var(--teal); }
+.hud-glass .divider { color: var(--text-faint); }
+.own-nameplate { color: var(--teal); }

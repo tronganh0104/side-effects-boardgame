@@ -24,6 +24,7 @@ export interface PlayerView {
   psyche: PublicPsycheSlotView[]
   effects: PlayerState['effects']
   handCount: number
+  tradeUsedThisTurn: boolean
   hand?: PublicCardView[]
 }
 
@@ -95,6 +96,7 @@ export function createPlayerView(
       psyche: player.psyche.slots.map(toPsycheSlotView),
       effects: player.effects,
       handCount: player.hand.length,
+      tradeUsedThisTurn: player.tradeUsedThisTurn,
       ...(player.id === viewerPlayerId
         ? { hand: player.hand.map(toCardView) }
         : {}),

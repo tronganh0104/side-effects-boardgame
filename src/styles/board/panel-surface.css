@@ -1,0 +1,110 @@
+/* Panel MATERIAL only — "aged apothecary paper" resting on the walnut table
+   background (src/assets/bg-*.webp). This file owns paper texture, ink
+   colours, brass/oxblood rule colours, and the seating shadow. It does not
+   own layout, sizing, or placement of any sidebar/panel — consumers apply
+   .panel-surface as a mixin class and handle their own layout. */
+
+.panel-surface {
+  --panel-paper-tint: #9e8769;
+  --panel-ink: #1a1006;
+  --panel-ink-2: #261b14;
+  --panel-brass: #76512f;
+  --panel-oxblood: #5c2119;
+  --panel-paper-hi: #dcc5af;
+  --panel-rule: rgba(26, 16, 6, 0.28);
+  --panel-rule-faint: rgba(26, 16, 6, 0.12);
+
+  /* background-size: 100% 100% (not cover/repeat/contain) — measured this
+     asset's baked-in radial vignette: centre luminance 52%, corners 47%.
+     `repeat` tiles the vignette into a visible grid of dark bands; a soft
+     radial stretched to 100% 100% stays invisible as a seam. */
+  background-image: url('../../assets/panel-parchment-640.webp');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-color: var(--panel-paper-tint);
+  color: var(--panel-ink);
+
+  /* Seat the paper on the wood: a thin inner rule plus an outer drop
+     shadow, so it reads as a sheet lying on the table rather than a
+     floating glass card. */
+  box-shadow:
+    inset 0 0 0 1px var(--panel-rule),
+    0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Ornate brass frame, consumed by PlayerSidebar.tsx's <aside> (the only
+   consumer so far, via "player-sidebar panel-surface panel-surface--framed").
+   Measured panel-frame-1024.webp: corner flourishes reach 155px inward at
+   1024px, plain molding is ~80px — hence the 155 slice below.
+
+   border-width: 24px, chosen empirically by screenshotting 40px/24px/20px
+   at both the sidebar's floor (--sidebar-w: 208px, i.e. this element's
+   border-box) and its 1920px-viewport width (288px):
+     - 40px kept the corner flourishes largest but cost 80px of the 208px
+       floor column before padding even applied — "THÔNG TIN CỦA BẠN" and
+       "NHẬT KÝ VÁN CHƠI" both wrapped to 2 lines, and the frame read as
+       eating the panel rather than bordering it.
+     - 20px freed the most content width (headings mostly fit one line) but
+       the corner flourish started to compress into an indistinct smear at
+       this asset's resolution.
+     - 24px (chosen) keeps the corner ornament clearly recognisable at both
+       sizes while leaving a 160px interior at the 208px floor (208 - 2×24)
+       and a 240px interior at 288px — enough for the 0.82rem log text to
+       read comfortably. At the floor, headings still wrap to two lines
+       occasionally but no text is clipped and the frame reads as a border,
+       not a wall.
+   border-image-width is intentionally not declared separately: it defaults
+   to border-width, so a second `border-image-width: 24px` line would only
+   restate the line above.
+
+   `fill` is required, not optional, despite `.panel-surface` already
+   painting `panel-parchment-640.webp` as the background underneath: this
+   frame asset's own middle region measures ~#a8916f (L 55, S 34), while
+   panel-parchment-640.webp measures ~#9e8769 (L 52, S 34) — 3 lightness
+   points apart. The frame's edge slices carry ~75px of that paper each
+   (up to the 155px the flourishes reach at full 1024px scale, but only
+   ~80px where the molding is plain), so at any border-image-width the
+   frame's own paper WILL paint over the base texture near every edge.
+   Without `fill`, only the border ring renders and the middle stays the
+   base texture, so that 3-point mismatch shows as a visible band just
+   inside the frame. With `fill`, the frame image supplies both the border
+   and the middle fill, so there is one paper, not two competing tints. */
+.panel-surface--framed {
+  border-style: solid;
+  border-width: 24px;
+  /* border-color would otherwise resolve to currentColor (--panel-ink,
+     #1a1006, near-black) — invisible once the border-image below loads,
+     but a failed or slow-loading image falls back to painting that as a
+     solid 24px black frame. transparent makes the fallback invisible
+     instead, so a broken image reads as "no frame" rather than "black
+     box". */
+  border-color: transparent;
+  /* Must be `stretch`, never `round`/`repeat`: the edge slices carry paper
+     texture with foxing spots, and repeating them marches visible
+     duplicate spots along every edge. */
+  border-image: url('../../assets/panel-frame-1024.webp') 155 fill stretch;
+
+  /* The frame's own paper (via `fill`, see above) now paints right up to
+     .panel-surface's edge, so the base rule's `inset 0 0 0 1px var(--panel-rule)`
+     would draw a second, competing hairline just inside the brass — drop
+     it here and keep only the outer seating shadow. Scoped to this
+     modifier only: unframed `.panel-surface` still needs that inset rule
+     as its one visible edge. */
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+/*
+  Contrast check — ink colours measured against this asset's mean pixel
+  colour (#9e8769):
+
+    colour              ratio   verdict
+    --panel-ink    #1a1006  5.46   passes WCAG AA
+    --panel-ink-2  #261b14  4.90   passes WCAG AA
+    (candidate)    #3a2a1c  4.01   FAILS
+    --panel-oxblood #5c2119 3.39   FAILS
+    --panel-brass  #76512f  2.05   FAILS badly
+
+  --panel-brass and --panel-oxblood are decorative only (rules, borders,
+  ornament, filled blocks with their own light text) — never use either as
+  a text colour directly on the paper.
+*/

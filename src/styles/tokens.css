@@ -1,0 +1,91 @@
+/* ============================================================
+   PsycheWard — Design System
+   Palette: dark navy + teal accent, matching UI mockups
+   ============================================================ */
+
+:root {
+  font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  /* Only weight 600 is self-hosted (fonts.css) — the design is unified at
+     SemiBold. Without this, every font-weight: 700/800 rule elsewhere in
+     the codebase would make the browser synthesise a fake bold on top of
+     the 600 face, which looks bad on a serif. This makes those requests
+     render as the real 600 instead. */
+  font-synthesis-weight: none;
+
+  /* Background */
+  --bg-from:        #0f172a;
+  --bg-to:          #020617;
+
+  /* Surfaces */
+  --card-bg:        rgba(15, 23, 42, 0.80);
+  --card-border:    rgba(148, 163, 184, 0.14);
+  --input-bg:       rgba(255, 255, 255, 0.05);
+  --input-border:   rgba(255, 255, 255, 0.10);
+
+  /* Text */
+  --text:           #e2e8f0;
+  --text-strong:    #f8fafc;
+  --text-muted:     #94a3b8;
+  --text-faint:     #64748b;
+
+  /* Accents */
+  --teal:           #14b8a6;
+  --teal-dark:      #0d9488;
+  --green:          #22c55e;
+  --red:            #ef4444;
+  --yellow:         #eab308;
+  --purple:         #a855f7;
+  --orange:         #f87171;
+
+  /* Card type colours */
+  --disorder-bg:    #3b0764;
+  --disorder-l:     #a855f7;
+  --drug-bg:        #14532d;
+  --drug-l:         #4ade80;
+  --therapy-bg:     #713f12;
+  --therapy-l:      #fbbf24;
+  --episode-bg:     #7f1d1d;
+  --episode-l:      #f87171;
+
+  /* Radius */
+  --radius:         18px;
+  --radius-sm:      12px;
+
+  /* Z-index layers */
+  --z-base:    1;
+  --z-hover:   10;
+  --z-selected:20;
+  --z-ghost:   1000;
+  --z-modal:   50;
+  --z-drawer:  100;
+
+  /* ── Adaptive board scale ──
+     Card width is the single knob: every board dimension derives from it.
+     But :root is an ANCESTOR of .game-board, and .game-board is where the
+     live --hand-count/--slot-count land (set from React state — see
+     GameBoard.tsx) — a :root rule can never see a descendant's custom
+     property, so --card-w itself, and everything calc()'d from it, is
+     computed on .game-board instead (layout.css). Only the pieces that do
+     NOT depend on the live counts stay here as plain constants:
+       --card-w-floor / --card-w-cap / --card-w-ceiling — the legibility
+         floor, the viewport/height cap, and the flat maximum. --card-w-cap
+         is renamed from --card-w-base: it is now one of three inputs
+         .game-board's --card-w picks the smallest of, not the value itself.
+         min(vw, vh) keeps the three board rows inside one screen on short
+         laptops while still growing on large desktops. Retune any of the
+         three in a media query to retune a whole device class — see
+         responsive.css — never --card-w directly.
+       --card-ratio, --board-gap, --zone-pad, --zone-chrome, --controls-space
+         — geometry that --card-w's fit formulas read but that never itself
+         depends on --card-w. */
+  --card-w-floor:   5rem;
+  --card-w-cap:     min(9vw, 12.4vh);
+  --card-w-ceiling: 13rem;
+  --card-ratio:   1.5;                                /* 1536 / 1024 — the artwork templates in src/assets/ */
+  --board-gap:    clamp(0.4rem, 1.1vh, 1rem);
+  --zone-pad:     clamp(0.5rem, 1.4vh, 1rem);
+  --zone-chrome:  clamp(3rem, 7vh, 5.5rem);           /* badges, nameplate, avatar bar */
+  /* Symmetric side gutters that keep the board's card rows centred: the right
+     one holds the turn controls, the left one holds the player's name. */
+  --controls-space: clamp(8.5rem, 12vw, 13rem);
+}

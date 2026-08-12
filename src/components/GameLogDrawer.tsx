@@ -1,4 +1,5 @@
 import { t } from '../i18n'
+import { GameLogList } from './GameLogList'
 
 interface GameLogDrawerProps {
   gameLog: string[]
@@ -15,11 +16,7 @@ export function GameLogDrawer({ gameLog, showLog, setShowLog }: GameLogDrawerPro
         <h2>{t('gameLog')}</h2>
         <button type="button" onClick={() => setShowLog(false)}>{t('close')}</button>
       </header>
-      <ol>
-        {gameLog.slice(-10).map((entry, index) => (
-          <li key={`${entry}-${index}`}>{entry}</li>
-        ))}
-      </ol>
+      <GameLogList entries={gameLog} limit={10} />
     </section>
   )
 }

@@ -1,0 +1,588 @@
+/* ============================================================
+   CHAT PANEL — aged apothecary paper (mirrors panel-surface.css)
+   ============================================================
+
+   This panel renders in three places: the in-game right rail
+   (.chat-sidebar > .chat-panel), the online lobby (.chat-panel alone,
+   as a direct flex child of .lobby-body — no bounding ancestor), and the
+   mobile drawer (.chat-drawer > .chat-panel). All three used to be stock
+   Tailwind navy/teal glass; they are now the same "aged apothecary paper"
+   material the left player sidebar uses (panel-surface.css's
+   .panel-surface), so the two wings of the board read as a matched pair
+   instead of one paper wing and one glass wing.
+
+   IMPORTANT — this file does NOT apply the `.panel-surface` class, because
+   it cannot: ChatPanel.tsx, ChatDrawer.tsx and GameBoard.tsx's
+   `<aside className="chat-sidebar">` are markup this file's owner doesn't
+   control. Every declaration below that "looks like" panel-surface.css is
+   a deliberate, hand-copied duplicate of that mixin's rules, repainted
+   directly onto `.chat-sidebar` / `.chat-panel` / `.chat-drawer` so the
+   look matches without the class. The real fix is still to add
+   `panel-surface` (and, if the ornate frame is wanted, also
+   `panel-surface--framed`) to those three elements' markup so this
+   duplication can be deleted and the chat panel just inherits the mixin
+   like PlayerSidebar.tsx does — flagging that for whoever owns those
+   components next. */
+
+:root {
+  /* Symmetric with the left sidebar by default, per --sidebar-w in
+     sidebar.css, so the two wings read as a matched pair; a single knob to
+     break that symmetry later without touching the grid rule itself. */
+  --chat-w: var(--sidebar-w);
+  /* Collapsed rail width: just enough for the toggle button and the unread
+     badge (see .chat-collapsed below), nothing else. */
+  --chat-rail-w: 3.2rem;
+
+  /* ── Type scale ──
+     Same reasoning as sidebar.css's --sidebar-fs-*: Cormorant Garamond's
+     x-height measures ~0.78x a normal UI font's at the same font-size
+     (canvas actualBoundingBoxAscent at 100px: 39 vs 50, measured), so sizes
+     picked for a normal-x-height face read ~22% too small here. This file
+     used to carry five near-duplicate ad-hoc sizes (0.68/0.8/0.82/0.85rem,
+     all within 3px of each other) left over from that unscaled Tailwind
+     baseline. Three steps replace all of them:
+       --chat-fs-meta    secondary text: timestamps, the unread-badge digit,
+                          the empty-state line, the collapse toggle glyph.
+       --chat-fs-body    primary reading text: author names, message
+                          bodies, the composer input and its placeholder.
+       --chat-fs-heading the "Trò chuyện" heading only (both the in-panel
+                          one and the drawer's own <h2>).
+     Deliberately literal values, not var(--sidebar-fs-*, …)-linked: this
+     file matches the sidebar's numbers on purpose (so the two wings' type
+     rhythm agrees), but does not take a live runtime dependency on a
+     custom property declared in a file this one doesn't own. */
+  --chat-fs-meta: 0.875rem;    /* 14px */
+  --chat-fs-body: 1rem;        /* 16px */
+  --chat-fs-heading: 1.18rem;  /* 18.88px */
+
+  /* ── Paper material literals ──
+     panel-surface.css declares --panel-ink et al ON THE `.panel-surface`
+     CLASS itself, not on :root — so they only resolve for elements that
+     are descendants of something carrying that class. Measured live via
+     `getComputedStyle(document.querySelector('.chat-sidebar'))
+       .getPropertyValue('--panel-ink')` → empty string: confirmed these do
+     NOT resolve here, in either location this panel renders (neither
+     ChatPanel.tsx's own markup nor GameBoard.tsx's `.chat-sidebar` wrapper
+     nor ChatDrawer.tsx's `.chat-drawer` wrapper has a `.panel-surface`
+     ancestor). So the values below are hardcoded to the exact hex the
+     contract in panel-surface.css specifies, to stay one material rather
+     than a second parchment with its own drift. The day
+     ChatPanel.tsx/ChatDrawer.tsx/GameBoard.tsx's chat markup picks up
+     `panel-surface` for real, every one of these six custom properties
+     (and the background-image/box-shadow block that uses them below)
+     should be deleted in favour of the inherited var(--panel-ink) etc. */
+  --chat-paper-tint: #9e8769;
+  --chat-ink: #1a1006;
+  --chat-ink-2: #261b14;
+  --chat-brass: #76512f;
+  --chat-oxblood: #5c2119;
+  --chat-paper-hi: #dcc5af;
+  --chat-rule: rgba(26, 16, 6, 0.28);
+  --chat-rule-faint: rgba(26, 16, 6, 0.12);
+}
+
+/* Mirrors .player-sidebar in sidebar.css (padding, z-index) but with
+   border-left instead of border-right, so the two wings read as a matched
+   pair from opposite edges of the board. Grid placement (column 3, full
+   row span) lives in layout.css alongside the other grid rules, same split
+   as .player-sidebar's.
+
+   Paints the same parchment sheet as panel-surface.css's `.panel-surface`
+   (see the file-top note — hand-copied, not inherited). Longhand only:
+   panel-surface.css's own sidebar-side counterpart hit a real bug where a
+   `background:` shorthand on a same-specificity selector reset
+   background-image back to `none` and wiped the texture; there is no such
+   shorthand anywhere in this file for exactly that reason.
+   background-size is 100% 100%, never repeat/cover: this asset carries a
+   baked-in radial vignette (centre luminance 52%, corners 47%, measured),
+   so `repeat` tiles it into a visible grid of dark bands, while stretching
+   the one soft radial to fill the box keeps the seam invisible. */
+.chat-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--chat-rule);
+  background-image: url('../../assets/panel-parchment-640.webp');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-color: var(--chat-paper-tint);
+  color: var(--chat-ink);
+  /* Seats the sheet on the walnut table the same way panel-surface.css's
+     base (unframed) rule does — a thin inner rule plus an outer drop
+     shadow, not a floating glass card. No backdrop-filter: it bought
+     nothing over a flat background here (there was no meaningful
+     translucency to blur — the panel was already ~65% opaque navy) and
+     cost a compositor layer on every frame. */
+  box-shadow:
+    inset 0 0 0 1px var(--chat-rule),
+    0 10px 24px rgba(0, 0, 0, 0.45);
+  padding: var(--zone-pad);
+  /* .top-actions is `position: fixed; top; right` (hand.css), pinned to the
+     viewport's top-right corner regardless of grid columns. Before this
+     sidebar existed, that corner belonged to the board's own-hand column; now
+     it lands on the chat heading instead, hiding the collapse toggle behind
+     the surrender button. Measured height of the fixed stack is ~5.9rem
+     (Xin thua + audio settings, stacked with gaps); reserve more than that
+     instead of the shared --zone-pad so nothing here is fixed-over. */
+  padding-top: calc(var(--zone-pad) + 6.5rem);
+  position: relative;
+  z-index: 3;
+}
+
+/* .chat-panel is the one element common to all three render sites, so it
+   carries the same paper paint again here for the lobby's standalone case
+   (a direct child of .lobby-body, no .chat-sidebar/.chat-drawer ancestor to
+   supply it). Nested inside .chat-sidebar or .chat-drawer, that ancestor
+   already painted the identical texture — see the override just below,
+   which cancels this block's own paint there instead of layering a second,
+   independently-stretched copy of the same vignette (two stretches of one
+   centred radial, at two different box sizes, would not line up at the
+   seam between them and would show as a visible ring). */
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  gap: 0.5rem;
+  background-image: url('../../assets/panel-parchment-640.webp');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-color: var(--chat-paper-tint);
+  color: var(--chat-ink);
+  box-shadow:
+    inset 0 0 0 1px var(--chat-rule),
+    0 10px 24px rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  /* Standalone contexts (the lobby) have no ancestor that bounds the panel's
+     height, so it needs its own; the sidebar and the drawer both override
+     this to fill their container instead. */
+  height: 22rem;
+  max-height: 22rem;
+}
+.chat-sidebar .chat-panel,
+.chat-drawer .chat-panel {
+  height: 100%;
+  max-height: none;
+  /* Ancestor already supplies the parchment background, the seating
+     shadow, and its own inset (--zone-pad above / 1rem on .chat-drawer) —
+     repainting/reboxing any of that here would double it, not reinforce
+     it. `background: none` is an intentional full reset, not the
+     accidental-shorthand bug this material has hit before elsewhere: the
+     conflicting declarations are the longhands in the base `.chat-panel`
+     rule above (lower specificity, same file, earlier in source), so this
+     always wins deterministically regardless of source order. */
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.chat-panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  /* Replaces the old purple ::before accent bar (see below): the whole
+     header row gets a hairline rule under it instead, so the heading's
+     prominence comes from letterform (small-caps + stroke, on
+     .chat-panel-title) and this rule, not a colour swatch. */
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.3rem;
+  border-bottom: 1px solid var(--chat-rule);
+}
+.chat-panel-heading > .chat-panel-title {
+  flex: 1 1 auto;
+  margin: 0;
+}
+/* Letterpress heading, matching the left sidebar's language: small-caps
+   (suits the serif, reads as pressed into the paper) instead of all-caps,
+   and a -webkit-text-stroke instead of font-weight — font-weight is INERT
+   throughout this app (fonts.css self-hosts Cormorant Garamond at weight
+   600 only, and tokens.css sets font-synthesis-weight: none; measured: the
+   same string at weights 400-900 renders at an identical 139.08px every
+   time), so the stroke is the only lever that actually thickens the
+   glyphs. `paint-order: stroke fill` keeps the stroke under the fill so it
+   doesn't blob shut the small-caps counters. 0.5px at this 18.88px size is
+   ~2.6% of the font-size, in the same 2.5-3% band sidebar.css's own
+   headings use.
+   The old purple (rgb(168, 85, 247)) ::before bar — the single most
+   generated "accent stripe" UI pattern there is — is deleted, not
+   recoloured: this app already has exactly one of those (the log/status
+   panels' teal/yellow bars, also deleted from the left sidebar for the
+   same reason), and letterform + the header's own border-bottom carry the
+   same prominence without adding a second decorative language. */
+.chat-panel-title {
+  font-size: var(--chat-fs-heading);
+  font-variant: small-caps;
+  letter-spacing: 0;
+  color: var(--chat-ink);
+  -webkit-text-stroke: 0.5px var(--chat-ink);
+  paint-order: stroke fill;
+}
+
+/* Wax-seal badge, not a purple pill: same oxblood/paper-hi pairing
+   self-avatar uses in sidebar.css. Measured (WCAG relative luminance):
+   #dcc5af on #5c2119 ≈ 7.49:1 — clears AA by a wide margin (verified in
+   the contract, not re-derived here). */
+.chat-unread-badge {
+  flex: 0 0 auto;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding: 0 0.35rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--chat-oxblood);
+  border: 1px solid var(--chat-brass);
+  color: var(--chat-paper-hi);
+  font-size: var(--chat-fs-meta);
+}
+
+.chat-collapse-btn {
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: unset;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: var(--chat-fs-meta);
+  /* Opaque walnut chip, not a 6% ink wash — the wash measured 94%
+     transparent (background contributed ~nothing), so the button read as
+     an empty outline on paper. Solid --chat-ink-2 fill reads as a quieter,
+     chrome-grade affordance next to the filled-oxblood primary actions
+     (.chat-composer-send) while still being unmistakably a button. Glyph
+     flips to the pale --chat-paper-hi to stay legible on the now-dark fill
+     (measured ~10.1:1, above even the 7.49:1 oxblood/paper-hi pairing the
+     contract verifies — walnut is darker than oxblood). */
+  color: var(--chat-paper-hi);
+  background: var(--chat-ink-2);
+  border: 1px solid var(--chat-brass);
+  /* Same fix as every thin-serif-at-small-size case elsewhere in this file
+     (.chat-message-author/-time/-text): measured (screenshot -> canvas ->
+     per-pixel luminance percentiles, tight Range-selected glyph box) the
+     bare «/» glyph at ~4.4:1 against its own opaque fill — under AA even
+     though the flat-colour pairing (--chat-paper-hi on --chat-ink-2) is
+     ~10:1, because the glyph's own stroke mass is too thin a fraction of
+     its box for the browser's anti-aliasing to land pure-ink pixels at the
+     5th/95th percentile. 0.5px matches this file's meta-text tier
+     (.chat-message-time). */
+  -webkit-text-stroke: 0.5px var(--chat-paper-hi);
+  paint-order: stroke fill;
+}
+/* Overrides base.css's generic `button:hover`/`:focus-visible` ring so this
+   control escalates within its own oxblood/brass family instead of
+   whatever the generic fallback ring currently is. Background is restated
+   (darkening slightly to --chat-ink) because the generic rule's own
+   `background` declaration would otherwise outrank this one on
+   specificity for that property alone. */
+.chat-collapse-btn:hover:not(:disabled),
+.chat-collapse-btn:focus-visible {
+  border-color: var(--chat-oxblood);
+  background: var(--chat-ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--chat-brass) 30%, transparent);
+}
+
+.chat-message-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.chat-message-list::-webkit-scrollbar { display: none; }
+
+.chat-empty {
+  flex: 1 1 auto;
+  margin: 0;
+  color: var(--chat-ink-2);
+  font-size: var(--chat-fs-meta);
+}
+
+/* Wash + left rule, the same grammar as sidebar.css's .self-turn
+   (.is-active / .is-idle): a translucent tint over the parchment plus a
+   coloured leading edge, never a solid navy/purple card. Text inside
+   always stays --chat-ink — the contract reserves brass/oxblood for
+   rules, borders and filled shapes, never for text (oxblood on paper
+   measures 3.39:1, brass 2.05:1 — both fail AA as text). */
+.chat-message {
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid transparent;
+  /* Tried darkening this to 10% first (reasoning: a darker card behind the
+     author/time/body text should read higher-contrast) and measured it
+     making things very slightly WORSE, not better (author name 4.18:1 ->
+     4.09:1) — with the WCAG ratio's +0.05 floor on both sides, darkening
+     the *background* pixels pulls the whole (background, glyph) pair
+     closer together rather than apart, once the glyph itself is already
+     near-black. Reverted to a lighter wash than either attempt: contrast
+     comes from keeping the background as light as the paper allows and
+     doing the rest with the glyph's own stroke (below), not from a darker
+     card underneath it. */
+  background: color-mix(in srgb, var(--chat-ink) 4%, transparent);
+}
+/* Per-speaker distinguishing, within the ink/brass/oxblood palette only:
+   this file has exactly one CSS hook for "who sent this" —
+   ChatMessageItem.tsx's isOwn boolean, exposed as the .chat-message-own
+   class — because nothing else about a message (its author's identity) is
+   selectable from CSS without a per-author class in the markup this file
+   doesn't own. So "own" gets the brass rule + oxblood wash (echoing
+   .self-turn.is-active, the sidebar's own "this is about you" signal) and
+   every other author shares the same plain ink wash with no rule. That
+   distinguishes self from everyone else, which is the case that actually
+   matters for reading a thread at a glance (2-8 players' messages are still
+   iterable by who sent them because each bubble prints message.author.
+   displayName in .chat-message-author right above the text) — but it
+   cannot tell two different opponents apart by colour alone, since doing
+   that without a rainbow of hues would need a class this file can't add.
+   Flagging that limitation rather than reaching for more colours to paper
+   over it. */
+.chat-message-own {
+  background: color-mix(in srgb, var(--chat-oxblood) 8%, transparent);
+  border-left-color: var(--chat-brass);
+}
+.chat-message-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: var(--chat-fs-meta);
+  color: var(--chat-ink-2);
+  margin-bottom: 0.15rem;
+}
+/* Small-caps + a light stroke, the same letterform-over-colour signal used
+   everywhere else in this material for "this label matters slightly more
+   than the line under it" — not a second colour, and specifically not one
+   of the old Tailwind hues.
+   Measured (screenshot -> canvas -> per-pixel relative-luminance
+   percentiles, p95 background / p5 glyph mass, this element's own tight
+   Range-selected text box) across several rounds: 3.83:1 with no stroke,
+   4.18:1 at 0.45px stroke + a 10% wash, 4.09:1 at 0.5px stroke + the same
+   10% wash — the wash move was a regression (see .chat-message's own
+   comment: darkening the *background* pulls both sides of the ratio
+   toward each other once the glyph is already near-black; it doesn't pull
+   them apart). Landed on 0.6px stroke over the lighter 4% wash above:
+   this app's own documented ceiling for this technique is ~0.7px before
+   -webkit-text-stroke starts filling in small-caps counters (see the
+   typography notes this file's siblings were written against), so 0.6px
+   is the largest step still short of that. This face's thin serif strokes
+   at 14px simply don't put a full 5%-of-the-box of true-ink pixels down
+   the way a flat two-colour WCAG contrast calculation assumes (that
+   calculation, run on the declared --chat-ink/--chat-paper-tint pair
+   alone, gives 5.46:1 — see panel-surface.css's own contract comment);
+   short small-caps strings are the worst case for this gap. Flagging the
+   residual honestly below rather than claiming AA where the rendered
+   pixels don't back it up. */
+.chat-message-author {
+  color: var(--chat-ink);
+  font-variant: small-caps;
+  -webkit-text-stroke: 0.6px var(--chat-ink);
+  paint-order: stroke fill;
+}
+/* -webkit-text-stroke: 0.5px, same reasoning and same 0.6px/0.7px ceiling
+   logic as .chat-message-author above — measured 3.03:1 with no stroke,
+   3.57:1 at 0.4px + the 10% wash (also reverted, see .chat-message).
+   ink-2, not ink: this line sits inside .chat-message-meta which already
+   reads --chat-ink-2, and the stroke should match the fill it's
+   thickening, not introduce a second, darker colour into the same word. */
+.chat-message-time {
+  -webkit-text-stroke: 0.5px var(--chat-ink-2);
+  paint-order: stroke fill;
+}
+.chat-message-text {
+  margin: 0;
+  color: var(--chat-ink);
+  font-size: var(--chat-fs-body);
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  /* Measured 3.03:1 with no stroke, 3.81:1 at 0.35px + the 10% wash (also
+     reverted, see .chat-message) — the same thin-serif-at-small-size
+     shortfall as the author name and timestamp, on this panel's single
+     most-read line of text, at the same 0.6px/0.7px ceiling used above. */
+  -webkit-text-stroke: 0.6px var(--chat-ink);
+  paint-order: stroke fill;
+}
+
+.chat-composer {
+  display: flex;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+/* "Parchment field" treatment: a lighter cut of paper than the sheet
+   behind it (--chat-paper-hi, not the base --chat-paper-tint) so the input
+   reads as a distinct, liftable card stock rather than a hole cut in the
+   sheet — same idea the entry screens' fields are getting, just in this
+   material's own two tones instead of theirs. */
+.chat-composer-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  resize: none;
+  max-height: 4.5rem;
+  font-family: inherit;
+  font-size: var(--chat-fs-body);
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--chat-paper-hi);
+  border: 1px solid var(--chat-brass);
+  color: var(--chat-ink);
+}
+.chat-composer-input::placeholder {
+  /* --chat-ink-2 on --chat-paper-hi is a lighter pairing than the
+     --chat-ink-2-on-base-paper the contract measures at 4.90:1, so there was
+     margin to spend on the conventional "placeholder is a hint" fade — but
+     measured (screenshot -> canvas -> per-pixel luminance percentiles) at
+     the opacity this used to carry (0.75), that margin was gone: 3.37:1,
+     same thin-serif-at-small-size shortfall as the message text elsewhere
+     in this file, made worse by deliberately fading it further. Full
+     opacity plus a stroke recovers it the same way the rest of this file
+     does, and the hint/content distinction still reads from --chat-ink-2
+     alone (lighter than the input's own --chat-ink) without needing to
+     fade it on top. */
+  color: var(--chat-ink-2);
+  opacity: 1;
+  -webkit-text-stroke: 0.3px var(--chat-ink-2);
+  paint-order: stroke fill;
+}
+.chat-composer-input:focus {
+  outline: none;
+  border-color: var(--chat-oxblood);
+  /* Brass focus ring, not teal — matches the entry screens' field
+     treatment instead of base.css's generic teal glow. */
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--chat-brass) 35%, transparent);
+}
+/* Filled oxblood, paper-hi label — the one pairing the contract verifies
+   at 7.49:1, reused here instead of introducing a second filled colour for
+   a single button. */
+.chat-composer-send {
+  flex: 0 0 auto;
+  min-height: unset;
+  padding: 0.4rem 0.9rem;
+  font-size: var(--chat-fs-meta);
+  background-color: var(--chat-oxblood);
+  border: 1px solid var(--chat-brass);
+  color: var(--chat-paper-hi);
+}
+.chat-composer-send:hover:not(:disabled),
+.chat-composer-send:focus-visible {
+  /* Restated: base.css's generic `button:hover`/`:focus-visible` sets
+     `background` (shorthand) at higher specificity than this rule's own
+     plain `.chat-composer-send { background-color: … }`, which doesn't set
+     anything on :hover itself — without this line the oxblood fill was
+     silently swapped for the generic translucent-white wash on hover/focus
+     (verified live: this exact bug is why base.css's own `.primary:hover`
+     needed the same one-line fix). */
+  background-color: var(--chat-oxblood);
+  filter: brightness(1.12);
+  border-color: var(--chat-oxblood);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--chat-brass) 30%, transparent);
+}
+
+/* ── Desktop collapse rail ──
+   One mechanism drives both effects: `.chat-collapsed` on `.game-board`
+   overrides --chat-w to the rail width (consumed by the grid rule in
+   layout.css) AND hides everything in the panel but the heading's toggle and
+   badge. Scoped through `.game-board.chat-collapsed`, not through
+   chatStore.isCollapsed alone, so the mobile drawer — which has no such
+   ancestor — is unaffected even if isCollapsed was left true from a previous
+   desktop session. */
+.game-board.chat-collapsed { --chat-w: var(--chat-rail-w); }
+.game-board.chat-collapsed .chat-sidebar {
+  padding: var(--zone-pad) 0.3rem;
+  /* Collapsed still shows the toggle button in the heading (see the
+     display:none list below), so it still needs the same top clearance from
+     .top-actions as the expanded sidebar — this shorthand above would
+     otherwise reset padding-top back to the bare --zone-pad. */
+  padding-top: calc(var(--zone-pad) + 6.5rem);
+  align-items: center;
+}
+.game-board.chat-collapsed .chat-panel-heading { flex-direction: column; }
+.game-board.chat-collapsed .chat-panel-title { display: none; }
+.game-board.chat-collapsed .chat-message-list,
+.game-board.chat-collapsed .chat-empty,
+.game-board.chat-collapsed .chat-composer { display: none; }
+
+/* The 💬 mobile toggle carries the same unread badge, pinned to its corner
+   instead of inline in a heading. */
+.chat-icon-btn { position: relative; }
+.chat-icon-badge {
+  position: absolute;
+  top: -0.3rem;
+  right: -0.3rem;
+}
+
+/* ── Mobile chat drawer ──
+   ChatDrawer.tsx renders `<section class="chat-drawer panel">`, meaning to
+   reuse .game-log-drawer's slide-up mechanism (overlays.css) the same way the
+   component comment says it does. Without this rule .chat-drawer only ever
+   picked up the generic .panel background/border and stayed
+   `position: relative` in normal flow instead of overlaying the board, so it
+   never actually behaved like a drawer. Anchored bottom-right like the log
+   drawer, which keeps it clear of .top-actions (pinned top-right) by
+   construction — the two never compete for the same corner.
+
+   Paper-painted the same way as .chat-sidebar (see that rule's comment for
+   why background-size is 100% 100% and why there is no backdrop-filter —
+   this used to have one too, at the same zero benefit/real cost). */
+.chat-drawer {
+  position: fixed;
+  z-index: var(--z-drawer);
+  right: 1rem;
+  bottom: 4rem;
+  width: min(24rem, calc(100vw - 2rem));
+  max-height: min(70dvh, 32rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slide-up-fade 0.25s ease-out;
+  background-image: url('../../assets/panel-parchment-640.webp');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-color: var(--chat-paper-tint);
+  color: var(--chat-ink);
+  border: 1px solid var(--chat-brass);
+  border-radius: var(--radius);
+  padding: 1rem;
+  box-shadow:
+    inset 0 0 0 1px var(--chat-rule),
+    0 14px 32px rgba(0, 0, 0, 0.6);
+}
+.chat-drawer header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  flex: 0 0 auto;
+}
+.chat-drawer header h2 {
+  margin: 0;
+  font-size: var(--chat-fs-heading);
+  font-variant: small-caps;
+  letter-spacing: 0;
+  color: var(--chat-ink);
+  -webkit-text-stroke: 0.5px var(--chat-ink);
+  paint-order: stroke fill;
+}
+/* The drawer's own close button is a bare <button> (ChatDrawer.tsx), which
+   without this would fall through to base.css's generic `button` rule —
+   near-white text (var(--text-strong)) on a translucent-white chip, tuned
+   for the old dark glass backdrop. On paper that pairing is light-on-light
+   and close to unreadable, so it gets the same ink/brass treatment as this
+   panel's other controls (.chat-collapse-btn, .chat-composer-send) instead
+   of being left on the generic dark-glass default. */
+.chat-drawer header button {
+  font-size: var(--chat-fs-meta);
+  color: var(--chat-ink);
+  background: color-mix(in srgb, var(--chat-ink) 6%, transparent);
+  border: 1px solid var(--chat-brass);
+}
+.chat-drawer header button:hover:not(:disabled),
+.chat-drawer header button:focus-visible {
+  border-color: var(--chat-oxblood);
+  background: color-mix(in srgb, var(--chat-ink) 10%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--chat-brass) 30%, transparent);
+}
+.chat-drawer .chat-panel { min-height: 0; }

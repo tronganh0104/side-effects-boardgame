@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIDE EFFECTS — Luật Chơi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F1ECDE;
+    --paper-card:#FBF9F1;
+    --ink:#26261F;
+    --ink-soft:#6B6656;
+    --rx-red:#A23C33;
+    --pill-teal:#3E7268;
+    --amber:#B37E2A;
+    --line:#CFC6A9;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+
+  body{
+    background:var(--paper);
+    background-image:
+      radial-gradient(circle at 50% 0%, rgba(0,0,0,0.03), transparent 60%);
+    color:var(--ink);
+    font-family:'Source Serif 4', Georgia, serif;
+    font-size:17px;
+    line-height:1.65;
+    padding:0 0 80px 0;
+  }
+
+  .label{
+    font-family:'Special Elite', 'Courier New', monospace;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+  }
+
+  .mono{
+    font-family:'JetBrains Mono', monospace;
+  }
+
+  /* ---------- PAD (outer sheet) ---------- */
+  .pad{
+    max-width:760px;
+    margin:40px auto;
+    background:var(--paper-card);
+    border:1px solid var(--line);
+    box-shadow:0 2px 0 var(--line), 0 18px 40px -20px rgba(0,0,0,0.35);
+    position:relative;
+  }
+
+  /* perforation strip under header */
+  .perforation{
+    height:14px;
+    background-image: radial-gradient(circle, var(--paper) 4.5px, transparent 5px);
+    background-size: 20px 20px;
+    background-position: 0 -3px;
+    background-repeat: repeat-x;
+    border-bottom:1px dashed var(--line);
+  }
+
+  /* ---------- HEADER (Rx slip) ---------- */
+  header{
+    padding:34px 40px 22px 40px;
+    position:relative;
+  }
+
+  .rx-mark{
+    position:absolute;
+    top:28px;
+    right:34px;
+    width:56px;
+    height:56px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transform:rotate(-6deg);
+  }
+  .rx-mark span{
+    font-family:'Special Elite', monospace;
+    font-size:40px;
+    color:var(--rx-red);
+    opacity:0.85;
+  }
+  .rx-mark::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    border:2px solid var(--rx-red);
+    border-radius:50%;
+    opacity:0.55;
+  }
+
+  .clinic-name{
+    font-size:12px;
+    color:var(--ink-soft);
+    letter-spacing:0.18em;
+    margin:0 0 18px 0;
+  }
+
+  h1{
+    font-family:'Special Elite', monospace;
+    font-size:38px;
+    margin:0 0 6px 0;
+    letter-spacing:0.02em;
+    color:var(--ink);
+  }
+  h1 small{
+    display:block;
+    font-family:'Source Serif 4', serif;
+    font-style:italic;
+    font-size:16px;
+    color:var(--ink-soft);
+    text-transform:none;
+    letter-spacing:0;
+    margin-top:8px;
+    font-weight:400;
+  }
+
+  .fields{
+    margin-top:26px;
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:14px 24px;
+  }
+  .field{
+    border-bottom:1px solid var(--ink);
+    padding-bottom:4px;
+  }
+  .field .k{
+    font-size:10.5px;
+    color:var(--ink-soft);
+    letter-spacing:0.1em;
+  }
+  .field .v{
+    font-family:'JetBrains Mono', monospace;
+    font-size:14px;
+    margin-top:2px;
+  }
+
+  /* ---------- BODY ---------- */
+  .body-wrap{
+    padding:8px 40px 10px 40px;
+  }
+
+  section{
+    padding:26px 0;
+    border-bottom:1px dashed var(--line);
+  }
+  section:last-of-type{border-bottom:none;}
+
+  .sec-tag{
+    display:inline-block;
+    font-family:'Special Elite', monospace;
+    font-size:11px;
+    letter-spacing:0.14em;
+    color:var(--rx-red);
+    border:1px solid var(--rx-red);
+    padding:3px 8px;
+    border-radius:2px;
+    margin-bottom:10px;
+  }
+
+  h2{
+    font-family:'Special Elite', monospace;
+    font-size:21px;
+    margin:0 0 12px 0;
+    color:var(--ink);
+  }
+
+  h3{
+    font-size:16.5px;
+    margin:0 0 6px 0;
+    font-weight:700;
+  }
+
+  p{margin:0 0 12px 0;}
+  ul, ol{margin:0 0 12px 0; padding-left:22px;}
+  li{margin-bottom:6px;}
+
+  .note{
+    background:rgba(0,0,0,0.025);
+    border-left:3px solid var(--amber);
+    padding:10px 14px;
+    font-size:15px;
+    margin:12px 0;
+  }
+  .note b{color:var(--amber);}
+
+  /* ---------- PILL LABEL CARDS ---------- */
+  .cardtype-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    margin-top:16px;
+  }
+  @media (max-width:640px){
+    .cardtype-grid{grid-template-columns:1fr;}
+    .fields{grid-template-columns:1fr 1fr;}
+    header, .body-wrap{padding-left:22px; padding-right:22px;}
+  }
+
+  .pill-label{
+    border:1px solid var(--line);
+    border-radius:8px;
+    overflow:hidden;
+    background:var(--paper-card);
+  }
+  .pill-cap{
+    height:9px;
+  }
+  .cap-disorder{background:var(--ink);}
+  .cap-drug{background:var(--pill-teal);}
+  .cap-episode{background:var(--rx-red);}
+  .cap-therapy{background:var(--amber);}
+
+  .pill-body{padding:14px 16px 16px 16px;}
+  .pill-body h3{
+    font-family:'Special Elite', monospace;
+    font-size:14px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    margin-bottom:8px;
+  }
+  .pill-body ul{padding-left:18px; margin-bottom:0;}
+  .pill-body p{margin-bottom:8px; font-size:15px;}
+  .pill-body p:last-child, .pill-body ul:last-child{margin-bottom:0;}
+
+  .exception-tag{
+    display:inline-block;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    background:rgba(0,0,0,0.06);
+    padding:2px 6px;
+    border-radius:3px;
+    margin-right:4px;
+  }
+
+  /* ---------- FAQ ---------- */
+  .faq-item{margin-bottom:14px;}
+  .faq-q{
+    font-weight:700;
+    color:var(--rx-red);
+    margin-bottom:2px;
+  }
+  .faq-a{color:var(--ink);}
+
+  /* ---------- goal stamp ---------- */
+  .goal-stamp{
+    margin-top:14px;
+    border:2px solid var(--pill-teal);
+    color:var(--pill-teal);
+    display:inline-block;
+    padding:10px 16px;
+    transform:rotate(-2deg);
+    font-family:'Special Elite', monospace;
+    letter-spacing:0.06em;
+    font-size:14px;
+    border-radius:3px;
+  }
+
+  footer{
+    text-align:center;
+    padding:22px 40px 0 40px;
+    font-size:12px;
+    color:var(--ink-soft);
+    font-family:'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<div class="pad">
+
+  <header>
+    <div class="rx-mark"><span>℞</span></div>
+    <p class="clinic-name label">PHÒNG KHÁM TÂM LÝ · TOA HƯỚNG DẪN SỬ DỤNG</p>
+    <h1>SIDE EFFECTS
+      <small>— trò chơi bài "hỗn loạn tâm lý": vừa tự chữa bệnh, vừa gieo bệnh cho người khác</small>
+    </h1>
+
+    <div class="fields">
+      <div class="field"><div class="k label">SỐ NGƯỜI CHƠI</div><div class="v">3 – 8</div></div>
+      <div class="field"><div class="k label">LOẠI BÀI</div><div class="v">Card game / Party</div></div>
+      <div class="field"><div class="k label">TÍNH CHẤT</div><div class="v">Đàm phán · Phá hoại</div></div>
+    </div>
+  </header>
+
+  <div class="perforation"></div>
+
+  <div class="body-wrap">
+
+    <section>
+      <span class="sec-tag">CHẨN ĐOÁN</span>
+      <h2>Giới thiệu</h2>
+      <p>Mỗi người chơi vào vai một "tâm lý" đang mang trong mình một loạt <b>rối loạn</b> cần chữa. Bạn vừa phải tự điều trị bản thân bằng thuốc và trị liệu, vừa có thể tương tác — theo nghĩa là gây thêm rối loạn — cho những người chơi khác.</p>
+      <div class="goal-stamp">MỤC TIÊU: CHỮA KHỎI TOÀN BỘ RỐI LOẠN TRONG TÂM LÝ CỦA BẠN — TRƯỚC TIÊN</div>
+    </section>
+
+    <section>
+      <span class="sec-tag">CHUẨN BỊ</span>
+      <h2>Setup</h2>
+      <ol>
+        <li>Tách riêng toàn bộ <b>bài Rối loạn</b> ra khỏi bộ bài, xáo đều.</li>
+        <li>Chia cho mỗi người <b>4 lá Rối loạn khác loại nhau</b> (không được trùng) — đặt mở trước mặt, đây chính là "khu tâm lý" của người chơi đó. Nếu bốc trúng lá trùng, xáo lại và bốc thay đến khi đủ 4 lá khác loại.</li>
+        <li>Nếu bàn có <b>6–8 người chơi</b>: mỗi người chỉ nhận <b>3 lá Rối loạn</b> thay vì 4.</li>
+        <li>Trộn toàn bộ bài còn lại (rối loạn dư ra + Thuốc + Cơn + Trị liệu) thành một bộ duy nhất.</li>
+        <li>Chia úp <b>4 lá</b> cho mỗi người làm bài trên tay.</li>
+        <li>Phần còn lại đặt giữa bàn làm bộ bài rút.</li>
+      </ol>
+      <div class="note"><b>Ghi chú:</b> bài đã chơi ra luôn để mặt lên — hoặc vào chồng bỏ, hoặc vào khu tâm lý của ai đó, tùy theo hiệu ứng của lá bài.</div>
+    </section>
+
+    <section>
+      <span class="sec-tag">LIỆU TRÌNH</span>
+      <h2>Trình tự chơi</h2>
+      <p>Người chơi lần lượt theo chiều kim đồng hồ. Mỗi lượt gồm:</p>
+      <ul>
+        <li>Rút <b>2 lá</b> từ bộ bài.</li>
+        <li>Được chơi <b>tối đa 2 lá</b> trong lượt của mình.</li>
+        <li>Nếu cuối lượt tay có <b>hơn 6 lá</b>, phải bỏ xuống cho còn đúng 6.</li>
+      </ul>
+      <p>Không có cơ chế "chen ngang" hay phản ứng khẩn: một khi bài đã được chơi ra, hiệu ứng có hiệu lực ngay lập tức.</p>
+    </section>
+
+    <section>
+      <span class="sec-tag">DANH MỤC</span>
+      <h2>Các loại bài</h2>
+      <div class="cardtype-grid">
+
+        <div class="pill-label">
+          <div class="pill-cap cap-disorder"></div>
+          <div class="pill-body">
+            <h3>Bài Rối loạn</h3>
+            <p>Nằm trong khu tâm lý của bạn, đại diện cho "vấn đề" cần chữa. Nếu chưa được điều trị, người khác có thể nhắm bài Cơn vào nó.</p>
+          </div>
+        </div>
+
+        <div class="pill-label">
+          <div class="pill-cap cap-drug"></div>
+          <div class="pill-body">
+            <h3>Bài Thuốc</h3>
+            <p>Mỗi rối loạn có một loại thuốc tương ứng. Đặt lá Thuốc chồng lên lá Rối loạn để điều trị.</p>
+            <p>Rối loạn đã điều trị an toàn hơn, nhưng <b>không miễn nhiễm tuyệt đối</b> — vài hiệu ứng đặc biệt vẫn tác động được dù đang "dùng thuốc".</p>
+          </div>
+        </div>
+
+        <div class="pill-label">
+          <div class="pill-cap cap-episode"></div>
+          <div class="pill-body">
+            <h3>Bài Cơn (Episode)</h3>
+            <p>Vũ khí chính để can thiệp vào đối thủ. Chơi lên một rối loạn <b>chưa điều trị</b> của người khác để kích hoạt "hiệu ứng cơn" riêng của rối loạn đó.</p>
+            <p>Nếu đối thủ có nhiều rối loạn hợp lệ, bạn được chọn nhắm vào lá nào.</p>
+          </div>
+        </div>
+
+        <div class="pill-label">
+          <div class="pill-cap cap-therapy"></div>
+          <div class="pill-body">
+            <h3>Bài Trị liệu</h3>
+            <p>Nút "reset" khẩn cấp: chữa được <b>bất kỳ</b> rối loạn nào, không cần đúng thuốc. Khi dùng, cả lá Rối loạn và lá Trị liệu bị loại khỏi bàn — nhưng rối loạn đó vẫn có thể quay lại về sau nếu bị gieo lại.</p>
+            <p><span class="exception-tag">Ngoại lệ 1</span>Anorexia chỉ chữa được bằng Trị liệu — không tồn tại thuốc cho nó.</p>
+            <p><span class="exception-tag">Ngoại lệ 2</span>Tremors thì ngược lại — <b>không</b> thể chữa bằng Trị liệu.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <section>
+      <span class="sec-tag">CHỈ ĐỊNH</span>
+      <h2>Luật quan trọng</h2>
+      <ul>
+        <li>Một khu tâm lý <b>không bao giờ</b> được giữ 2 lá Rối loạn cùng loại — kể cả khi một trong hai đã điều trị.</li>
+        <li>Không được giữ quá <b>6 lá</b> trên tay sau khi kết thúc lượt của mình.</li>
+        <li>Rối loạn đã điều trị vẫn có thể bị ảnh hưởng bởi một số hiệu ứng tùy theo chữ trên bài.</li>
+        <li>Mọi hiệu ứng đều ghi rõ trên bài và luôn công khai — không có hiệu ứng ẩn.</li>
+      </ul>
+    </section>
+
+    <section>
+      <span class="sec-tag">TƯ VẤN</span>
+      <h2>Đàm phán &amp; trao đổi</h2>
+      <p>Side Effects cho phép thương lượng công khai, và đây thường là nơi mọi thứ trở nên hỗn loạn nhất.</p>
+      <ul>
+        <li>Có thể trao đổi bài hoặc thỏa thuận với bất kỳ ai, vào bất kỳ lúc nào — kể cả trong lượt của người khác.</li>
+        <li>Có thể hứa hẹn hành động tương lai, hoặc lập liên minh tạm thời.</li>
+      </ul>
+      <p>Nhưng cần nhớ:</p>
+      <ul>
+        <li>Bạn vẫn chỉ được <b>chơi tối đa 2 lá</b> trong lượt của chính mình.</li>
+        <li>Không được chơi bài ngoài lượt của mình.</li>
+        <li>Thỏa thuận <b>không có tính ràng buộc</b> — ai cũng có thể lật mặt, thất hứa là một phần hợp lệ của trò chơi.</li>
+      </ul>
+    </section>
+
+    <section>
+      <span class="sec-tag">LỜI KHUYÊN BÁC SĨ</span>
+      <h2>Mẹo chơi</h2>
+      <ul>
+        <li>Đừng để hở những rối loạn "nặng đô" mà không điều trị — chúng là mục tiêu ưu tiên của người khác.</li>
+        <li>Giữ bài Thuốc để dùng đúng lúc, không cần vội chữa nếu chưa bị đe dọa.</li>
+        <li>Theo dõi xem đối thủ đang cố thu thập hoặc điều trị gì để đón đầu.</li>
+        <li>Dùng bài Cơn để phá thời điểm quan trọng của người khác, thay vì tấn công ngẫu nhiên.</li>
+        <li>Trao đổi khôn khéo nhiều khi hiệu quả hơn tấn công trực diện.</li>
+        <li>Luôn chuẩn bị tinh thần bị "xù" thỏa thuận — đó là một phần của trò chơi.</li>
+      </ul>
+    </section>
+
+    <section>
+      <span class="sec-tag">HỎI & ĐÁP</span>
+      <h2>Câu hỏi thường gặp</h2>
+
+      <div class="faq-item">
+        <div class="faq-q">Được chơi hơn 2 lá trong một lượt không?</div>
+        <div class="faq-a">Không. Giới hạn luôn là 2 lá mỗi lượt.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Có thể chơi bài trong lượt của người khác không?</div>
+        <div class="faq-a">Không. Chỉ được chơi bài trong lượt của chính mình.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Hết bài trên tay thì sao?</div>
+        <div class="faq-a">Không bị loại khỏi game — bạn chỉ rút bài bình thường vào lượt kế tiếp.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Có thể chữa nhiều rối loạn trong một lượt không?</div>
+        <div class="faq-a">Được, miễn không vượt quá giới hạn 2 lá chơi/lượt và tuân theo luật khu tâm lý.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Đàm phán có bắt buộc không?</div>
+        <div class="faq-a">Không bắt buộc, nhưng thường là cách mạnh nhất để xoay chuyển cục diện.</div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer>
+    ℞ TOA THUỐC NÀY ĐƯỢC TỔNG HỢP LẠI ĐỂ DỄ ĐỌC — LUÔN THAM KHẢO RULEBOOK GỐC KHI CÓ TÌNH HUỐNG PHỨC TẠP
+  </footer>
+
+</div>
+
+</body>
+</html>

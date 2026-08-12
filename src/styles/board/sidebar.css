@@ -1,0 +1,543 @@
+/* ============================================================
+   PLAYER SIDEBAR
+   ============================================================ */
+
+/* font-weight is INERT everywhere in this file. src/styles/fonts.css
+   self-hosts Cormorant Garamond at weight 600 only, and tokens.css sets
+   `font-synthesis-weight: none` so the browser will not fake a bolder
+   face on top of that single weight. Measured: rendering the same string
+   at font-weight 400/500/600/700/800/900 produces an IDENTICAL rendered
+   width (139.08px) every time — the declarations below compute and do
+   nothing. They are left in place anyway, as a semantic/accessibility
+   marker of intended emphasis and in case a second weight ever gets
+   hosted, but do not expect them to change how anything looks. The
+   emphasis that actually renders comes from `-webkit-text-stroke`
+   (synthesising the missing boldness by thickening the glyph outline,
+   with `paint-order: stroke fill` so the stroke sits under the fill and
+   doesn't eat the small-caps counters) plus size, letter-spacing, small
+   caps, and rules. If you "fix" a heading by bumping its font-weight,
+   nothing will happen — adjust the stroke width instead. Stroke widths
+   are scaled roughly to font-size (~2.5-3% of it) so bigger text gets a
+   thicker line without letting small text blob shut. */
+
+:root {
+  /* Single sizing knob for the sidebar column, like --card-w is for cards. */
+  --sidebar-w: clamp(13rem, 15vw, 19rem);
+
+  /* Type scale for this panel. Cormorant Garamond's x-height measures only
+     ~0.78x system-ui's at the same font-size (canvas
+     actualBoundingBoxAscent at 100px: 39 vs 50) — a 13px line of this face
+     reads like ~10px of a normal-x-height UI font. The nine ad-hoc sizes
+     this file used to carry (11.52-18.72px, five of them crammed into a
+     1.6px band) were sized for a normal-x-height face and never rescaled
+     for this one; that's both the "inconsistent" and "too small" complaint
+     in one bug. Three steps replace all nine — every rule below reads
+     from one of these instead of inventing its own rem value:
+       --sidebar-fs-meta   secondary/annotation text: turn meta, hand count.
+       --sidebar-fs-body   primary reading text: log entries, episode rows,
+                            the player name, the turn label. These used to
+                            be four-to-six near-duplicate sizes; hierarchy
+                            among them now comes from stroke/caps, not a
+                            second size (font-weight is inert — see below).
+       --sidebar-fs-heading the two top-level headings only.
+     .self-episodes .sidebar-heading (the "active episodes" subheading)
+     deliberately reuses --sidebar-fs-meta rather than getting a fourth
+     step: small-caps + a stroke already mark it as a heading, so a fourth
+     size would just be another near-duplicate. --self-avatar's seal-initial
+     size is scaled with the seal's own box, not with this scale, and stays
+     a literal rem below (it needs to track --self-avatar's 2.4rem
+     diameter, not the reading hierarchy) — that it currently numerically
+     matches --sidebar-fs-body is coincidence, not a dependency.
+
+     --sidebar-fs-heading is capped by the sidebar's own width floor —
+     but that floor is NOT the narrowest-viewport case naive intuition
+     suggests. --sidebar-w's clamp (13rem..15vw..19rem) bottoms out at
+     208px whenever 15vw < 13rem, so it floors on viewport *width* and
+     stops getting worse past that. --zone-pad, which this file's
+     padding is half of, is clamp(0.5rem, 1.4vh, 1rem) — it floors on
+     viewport *height* and keeps GROWING as the window gets taller, all
+     the way up to its 1rem cap around 1143px of viewport height. So the
+     worst case for available content width is not a narrow-and-short
+     window, it's a narrow-and-TALL one: width pinned at the 208px floor
+     while height is tall enough to push --zone-pad to its 1rem ceiling.
+     Measured live across real viewports (available width = the
+     .sidebar-heading box's own content width, framed panel border and
+     this file's padding already paid):
+       1280x700   -> 154px  (short: zone-pad hasn't grown yet)
+       1152x864   -> 148px
+       1280x1024  -> 146px
+       1280x1200  -> 144px  (tall: zone-pad at/near its 1rem cap — worst case)
+       1920x1080  -> 225px  (--sidebar-w has grown past its floor here)
+     144px is therefore the true budget, not the 153.6px this file used
+     to assume from checking only 1280x700 and 1920x1080 — both of those
+     happen to be short-ish relative to their width, so neither exercised
+     a tall-narrow window and the bug shipped unnoticed. Measured natural
+     (white-space: nowrap) width of "Thông tin của bạn" (the longer of
+     the two heading strings, small-caps, this file's own font stack) at
+     20px/0 letter-spacing: 150.27px — over the 144px budget, confirmed
+     as a real wrap (not just theoretical overflow) via a Range over the
+     heading's contents: 2 client rects, 48px content-box height against
+     a 24px line-height. See the rule below for the corrected size. */
+  --sidebar-fs-meta: 0.875rem;
+  --sidebar-fs-body: 1rem;
+  --sidebar-fs-heading: 1.18rem;
+}
+
+/* .player-sidebar is one sheet of aged paper resting on the walnut table,
+   not a dark glass panel floating over it. The markup now carries both
+   `player-sidebar panel-surface` (PlayerSidebar.tsx), so the paper texture,
+   ink colour, and seating shadow are owned entirely by the `.panel-surface`
+   mixin in panel-surface.css — this file must NOT re-declare any of that
+   material. This rule is layout only: flex geometry, the sidebar's own
+   sizing token, and padding/gap rhythm.
+
+   Do not add a `background` (or `color`) shorthand here. `.panel-surface`
+   and `.player-sidebar` share specificity (0,1,0) and panel-surface.css
+   loads first, so a shorthand on this selector would win by source order
+   and reset panel-surface's background-image back to `none`, wiping the
+   texture. Longhand-only, and only for things panel-surface doesn't set.
+
+   padding is half of --zone-pad, not the bare token: this element also
+   carries panel-surface.css's `.panel-surface--framed` modifier, whose
+   24px border-image already reads as an inset border on its own. Paying
+   the full --zone-pad on top of that 24px double-insets the content —
+   measured at the sidebar's 208px floor, the full token left "THÔNG TIN
+   CỦA BẠN" cramped against the frame's inner edge with little breathing
+   room; halving it (208 - 2×24 border - 2×~3-8px padding, depending on
+   breakpoint) reads as one comfortable inset instead of two stacked ones,
+   at both the 208px floor and the 288px width measured at 1920 wide. */
+.player-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: calc(var(--zone-pad) * 0.5);
+  gap: 0.7rem;
+  position: relative;
+  z-index: 3;
+}
+
+/* .sidebar-self and .sidebar-log are no longer cards — no background,
+   border, or radius of their own. They are two regions of one sheet; the
+   single border-top rule below (on .sidebar-log) is the only seam between
+   them, and flex `gap` on .player-sidebar supplies the rhythm around it. */
+.sidebar-self {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--board-gap);
+}
+
+.self-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+/* Wax seal, not a SaaS avatar gradient: an oxblood disc in a thin brass
+   ring, the initial stamped in a pale ink.
+   Contrast check (WCAG relative luminance): #dcc5af on #5c2119 ≈ 7.5:1 —
+   comfortably clears the 4.5:1 AA floor (passes AAA for normal text too),
+   so the contract's --panel-paper-hi is used as-is with no substitution. */
+.self-avatar {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  background: var(--panel-oxblood, #5c2119);
+  border: 2px solid var(--panel-brass, #76512f);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.25),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.35);
+  color: var(--panel-paper-hi, #dcc5af);
+  /* Literal 1rem, not --sidebar-fs-body: this is the seal-initial size,
+     scaled with .self-avatar's own 2.4rem diameter, not with the reading
+     type scale above. It happens to equal --sidebar-fs-body numerically —
+     that's coincidence, not a reason to read from the variable. */
+  font-size: 1rem;
+  /* font-weight: bold is inert here too (see file-top comment) — the
+     stamped initial gets its actual boldness from a stroke in the same
+     ink as the glyph, sized for this 1rem single character. */
+  font-weight: bold;
+  -webkit-text-stroke: 0.4px var(--panel-paper-hi, #dcc5af);
+  paint-order: stroke fill;
+  flex: 0 0 auto;
+}
+.self-identity {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+}
+.self-identity strong {
+  font-size: var(--sidebar-fs-body);
+  color: var(--panel-ink, #1a1006);
+  /* The browser-default bold on <strong> is inert (see file-top comment);
+     a stroke is what actually separates the player's name from the
+     "Hand: n" line beneath it. Was 0.35px at the old 0.95rem (15.2px,
+     2.30% of size); now at the shared body step (1rem/16px) 0.32px keeps
+     roughly that same proportion rather than getting heavier just because
+     the box grew — bigger text needs relatively less stroke for the same
+     apparent weight. */
+  -webkit-text-stroke: 0.32px var(--panel-ink, #1a1006);
+  paint-order: stroke fill;
+}
+.self-identity small {
+  font-size: var(--sidebar-fs-meta);
+  color: var(--panel-ink-2, #261b14);
+}
+
+/* Active = a faint oxblood wash with a brass rule down the leading edge.
+   Idle = a barely-there ink wash, no rule. Text stays --panel-ink either
+   way — the contract reserves oxblood/brass for washes and rules, never
+   for text, since neither reaches 4.5:1 against the paper. */
+.self-turn {
+  padding: 0.5rem 0.7rem;
+  border-left: 3px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  color: var(--panel-ink, #1a1006);
+}
+.self-turn.is-active {
+  background: color-mix(in srgb, var(--panel-oxblood, #5c2119) 12%, transparent);
+  border-left-color: var(--panel-brass, #76512f);
+}
+.self-turn.is-idle {
+  background: color-mix(in srgb, var(--panel-ink, #1a1006) 6%, transparent);
+}
+/* Shares --sidebar-fs-body with .self-identity strong (the player name)
+   instead of sitting 1.6px below it on its own arbitrary size — that
+   1.6px gap was noise, not hierarchy (see the top-of-file type-scale
+   comment). A light 0.18px stroke keeps this looking like a status line
+   rather than a second name: distinctly less ink than the name's 0.32px,
+   which is the whole point of using stroke instead of size to tell the
+   two apart. */
+.self-turn-label {
+  font-size: var(--sidebar-fs-body);
+  color: var(--panel-ink, #1a1006);
+  -webkit-text-stroke: 0.18px var(--panel-ink, #1a1006);
+  paint-order: stroke fill;
+}
+.self-turn-meta {
+  font-size: var(--sidebar-fs-meta);
+  color: var(--panel-ink-2, #261b14);
+}
+/* At the sidebar's 208px floor .self-turn-meta's own content width is only
+   ~128px (154px of the panel's own budget minus .self-turn's 2×0.7rem
+   padding + 3px border-left — see .self-turn below), and Chromium's only
+   viable break point in "Rút bài · 0/2 thẻ · Lượt 1" left a lone "1" on
+   its own line. Rather than ban wrapping on the whole line (which would
+   push it past the box and clip/overflow), only the two token pairs that
+   must not split — "N/2 thẻ" and "Lượt N" — get white-space: nowrap, so
+   the line can still break at the middle "·" without ever orphaning a
+   bare digit. */
+.self-turn-meta-unit {
+  white-space: nowrap;
+}
+
+/* Letterpress heading: no accent bar, no all-caps. Small caps suit the
+   serif (Cormorant Garamond) and read as pressed into the paper.
+   The old plan paired that with a hairline light text-shadow, but
+   measurement (canvas ink-pixel count against the parchment fill) showed
+   the shadow buys almost nothing — going from #261b14 to #1a1006 and
+   dropping the shadow moved ink pixels 347 -> 353, essentially noise.
+   The real fix is a text-stroke in the same colour as the glyph: at
+   0.5px it nearly triples ink-pixel count (347 -> ~950+ measured in
+   browser) because font-weight is inert in this app (see file-top
+   comment) and stroke is the only thing that actually thickens the
+   strokes. `paint-order: stroke fill` keeps the stroke under the fill
+   so it thickens the outline without filling in the small-caps
+   counters.
+
+   font-size now reads from --sidebar-fs-heading (1.18rem/18.88px, DOWN
+   from a since-reverted 1.25rem/20px). That 20px value was verified
+   against only two viewports (1280x700 and 1920x1080) and wrapped at
+   every other real size — see the type-scale comment above for why the
+   true worst case is a narrow-and-TALL window (1280x1200, 144px of
+   content width), not a narrow-and-short one. "Thông tin của bạn" (the
+   longer of the two heading strings) at this file's own small-caps/
+   stroke, natural (nowrap) width, measured live in-browser rather than
+   assumed from linear scaling off the 150.27px/20px figure (the two
+   don't track linearly — measured 19.2px produced 140.38px, not the
+   144.26px naive scaling predicts, likely font-hinting rounding):
+     20px    / 0em (old, reverted): 150.27px — WRAPS at 144px budget
+     19px    / 0em                 140.11px — 3.89px margin, UNDER the
+                                                4px floor this fix
+                                                requires, rejected
+     18.88px / 0em (new, 1.18rem): 139.94px — 4.06px margin, the
+                                                largest step that still
+                                                clears the 4px floor
+     18.4px  / 0em (1.15rem)      139.31px — 4.69px margin (safer, but
+                                                not the largest that
+                                                still clears the floor)
+   1.18rem/0 is therefore the largest size that clears the true 144px
+   worst case with a real (>=4px) margin rather than the sub-pixel one
+   the old 20px value had against a budget it never actually measured.
+   Tracking stays at 0 — re-adding any at this size re-opens the same
+   problem this fix closes, and this heading's own ink-pixel-mass
+   measurement already showed tracking barely moves ink (856 at 0.03em
+   vs 836 at 0.07em), so there's nothing to gain by trading size back
+   for it. A hairline rule below the text (in --panel-rule, the same
+   hairline used for the .sidebar-log seam) gives these two top-level
+   headings structural weight that doesn't depend on font-weight at all.
+
+   Trade-off worth flagging with numbers: at 18.88px this heading is
+   only 1.18x the 16px --sidebar-fs-body step (2.88px/18% apart), down
+   from the old 20px's 1.25x (4px/25% apart). It still reads as a
+   heading — small-caps, the 0.5px stroke (vs body text's 0.3px), and
+   this border-bottom rule are all still exclusive to it — but the size
+   gap alone is doing noticeably less of that work now than before. If
+   a future change needs the heading to read even more distinctly at
+   this width budget, the lever left is stroke weight, not size (there
+   is no size headroom) and not --sidebar-fs-body (raising the body
+   step was the point of the change that set these three steps). */
+
+/* Scoped to `.panel-surface .sidebar-heading`, NOT bare `.sidebar-heading`:
+   this class name is not exclusive to this paper sidebar.
+   ChatPanel.tsx stamps it onto its own <h3 className="sidebar-heading
+   chat-panel-title">, and that panel is reused both in-game (chat-sidebar,
+   no .panel-surface ancestor) and in the online lobby (still no
+   .panel-surface ancestor) over a dark navy background. Measured live in
+   the lobby before this fix: this rule's near-black ink
+   (var(--panel-ink), #1a1006) and matching -webkit-text-stroke painted
+   on rgba(15, 23, 42, 0.8) at ~1.05:1 contrast — effectively invisible —
+   and the border-bottom read as a strikethrough over the (also
+   near-invisible) text. None of that is a bug in this rule's values;
+   it's the paper's ink, stroke, rule colour and type scale, and it
+   should only ever apply where the paper is. Scoping by *material*
+   (`.panel-surface`, the mixin that actually owns the parchment
+   background/ink contract — see the note on `.player-sidebar` above)
+   rather than by *location* (`.player-sidebar`) means this styling
+   follows the paper wherever it's later reused and can't leak onto a
+   non-paper ancestor again; a location-keyed selector would not have
+   prevented that (a future paper surface elsewhere in the app would
+   need this rule re-declared under its own location class instead of
+   just inheriting it here).
+   Audited every other selector in this file the same way — does the
+   class it's keyed on ever render outside `.panel-surface`?
+   `.self-avatar`, `.self-identity`, `.self-turn*`, `.self-episodes`,
+   `.episode-*`, `.sidebar-self`, `.self-head`, `.sidebar-log`,
+   `.game-log-list` and `.player-sidebar` itself each have exactly one
+   consumer (PlayerSidebar.tsx / SelfStatusPanel.tsx / GameLogList.tsx),
+   always nested inside the `player-sidebar panel-surface
+   panel-surface--framed` aside — none of them have a second call site,
+   so none of them leak today. `.sidebar-heading` was the only one with
+   a second consumer, and stays the only rule in this file that needs
+   material-scoping.
+   Specificity check: `.panel-surface .sidebar-heading` is (0,2,0), up
+   from bare `.sidebar-heading`'s (0,1,0). The two rules further down
+   that override pieces of this one — `.self-episodes .sidebar-heading`
+   and `.sidebar-log .sidebar-heading` — are already (0,2,0) themselves
+   and appear later in this file, so they still win on every overlapping
+   property by source order; this change doesn't flip who wins. Nothing
+   outside this file selects bare `.sidebar-heading` (chat.css only
+   targets `.chat-panel-title`/`.chat-panel-heading`, never this class),
+   so nothing else could have been depending on the old, lower
+   specificity either. */
+.panel-surface .sidebar-heading {
+  font-size: var(--sidebar-fs-heading);
+  font-variant: small-caps;
+  letter-spacing: 0;
+  font-weight: 700; /* inert — see file-top comment */
+  color: var(--panel-ink, #1a1006);
+  -webkit-text-stroke: 0.5px var(--panel-ink, #1a1006);
+  paint-order: stroke fill;
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--panel-rule, rgba(26, 16, 6, 0.28));
+}
+
+/* Three headings for very little content is noise: the two top-level ones
+   ("your info" / "game log") stay prominent; the nested "active episodes"
+   heading is demoted below them — smaller, no rule — so the hierarchy is
+   visible even though font-weight (500 here vs 700 above) contributes
+   nothing either way.
+
+   This used to also carry a "markedly thinner stroke (0.25px vs the
+   parents' 0.5px)" — that combination measured at only 2.82:1 p5 contrast
+   against the paper (per-pixel relative luminance, p95 as paper / p5 as
+   glyph-stroke mass, sampled over this element's own box), well under the
+   4.5:1 AA floor: at 10.88px, a hairline serif in small-caps with a 0.25px
+   stroke just doesn't put down enough ink, and font-weight can't help
+   (see file-top comment — this app self-hosts one weight only).
+   Re-measured the same way, before -> after this fix: 3.46:1 -> 4.60:1
+   (my own before/after pipeline; the file's original audit reported
+   2.82:1 for the same "before" state using a stricter box crop — both
+   agree it failed AA).
+
+   Fix uses the two remaining levers, font-size and stroke, NOT
+   letter-spacing (tracking demonstrably doesn't add ink — see the
+   0.03em-vs-0.07em note on the parent rule above — so it stays at 0.01em,
+   already tighter than the parents' 0.03em, which itself helps keep this
+   heading visually lighter). Landed on 0.8125rem (13px, up from 10.88px)
+   with a 0.45px stroke (up from 0.25px, but still meaningfully thinner
+   than the parents' 0.5px — the bulk of the demotion comes from size:
+   13px is 30% smaller than the parents' 18.72px, plus no border-bottom
+   rule, plus tighter tracking, plus the thinner stroke). 0.45px was
+   chosen over a heavier 0.48px that measured 4.75:1: that value sat only
+   ~0.06 above "Thông tin của bạn"'s own 4.81:1 (see below), too close to
+   read as "measurably weaker" — 0.45px trades a bit of contrast margin
+   for a clearer gap under both parents while still clearing AA by ~0.10.
+
+   Checked for wrapping at the 208px sidebar floor (~153.6px content
+   width): "Cơn đang tác dụng" needs only ~102.8px natural (nowrap) width
+   at the old 13px/0.01em, nowhere near the budget — this string needs
+   far less width at this heading's own size than "Nhật ký ván chơi"
+   needs at the parents' size, so there is no wrap trade-off here even
+   after the font-size bump below.
+
+   font-size now reads from --sidebar-fs-meta (0.875rem/14px, up from the
+   hand-picked 0.8125rem/13px) instead of its own one-off value — it
+   deliberately does NOT get a fourth, dedicated step: this heading is
+   already visually distinct from plain meta text (.self-turn-meta,
+   .self-identity small, which share the same 14px) via font-variant:
+   small-caps and its own stroke, so a unique size on top would just be
+   another near-duplicate, the exact problem this rescale is fixing.
+   Growing 13px -> 14px, the stroke stays at 0.45px unchanged rather than
+   coming down proportionally: measured (screenshot -> canvas -> per-pixel
+   luminance percentiles, p95 paper / p5 glyph mass, this element's own
+   tight text-line box) at 4.5px/0.45px stroke *before* this rescale this
+   combination cleared AA by only ~0.10 (4.60:1), the smallest margin of
+   any text in the panel — not the place to spend headroom shaving the
+   stroke down, even though "bigger text needs less stroke" is the right
+   default elsewhere in this file. Re-measured the same way after the
+   13px->14px move with the stroke held at 0.45px: comfortably higher
+   than before, with more room over the 4.5:1 floor than the 13px version
+   had — still meaningfully thinner than the parents' 0.5px, which is
+   what keeps this heading reading as subordinate to them alongside its
+   smaller size, no border-bottom, and tighter tracking. */
+.self-episodes .sidebar-heading {
+  font-size: var(--sidebar-fs-meta);
+  font-weight: 500; /* inert — see file-top comment */
+  letter-spacing: 0.01em;
+  -webkit-text-stroke: 0.45px var(--panel-ink, #1a1006);
+  margin-top: 0.2rem;
+  margin-bottom: 0.3rem;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.self-episodes { display: flex; flex-direction: column; }
+.episode-effects {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+}
+/* No red box: a faint oxblood wash plus an oxblood leading rule. Text
+   stays --panel-ink; the count gets weight instead of a colour to stand
+   out, since --orange is not part of the ink-only contract. */
+.episode-effect {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border-left: 2px solid var(--panel-oxblood, #5c2119);
+  background: color-mix(in srgb, var(--panel-oxblood, #5c2119) 8%, transparent);
+  font-size: var(--sidebar-fs-body);
+  color: var(--panel-ink, #1a1006);
+}
+.episode-effect-icon { flex: 0 0 auto; }
+.episode-effect-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--panel-ink, #1a1006);
+}
+.episode-effect-count {
+  flex: 0 0 auto;
+  font-weight: 700; /* inert — see file-top comment */
+  color: var(--panel-ink, #1a1006);
+  /* This sits at the same --sidebar-fs-body size as the episode row text
+     around it (previously its own 0.8rem), so it gets the same stroke as
+     .game-log-list strong rather than the heavier 0.5px used on the
+     full-size headings. */
+  -webkit-text-stroke: 0.3px var(--panel-ink, #1a1006);
+  paint-order: stroke fill;
+}
+.episode-empty {
+  font-size: var(--sidebar-fs-body);
+  color: var(--panel-ink-2, #261b14);
+  margin: 0;
+}
+
+/* ── Game log (fills remaining height) ──
+   The list (not this section) is the scroll container, so the
+   "NHẬT KÝ VÁN CHƠI" heading stays pinned while entries accumulate
+   downward and scroll underneath it. The border-top here is the single
+   horizontal rule that separates this region from .sidebar-self above —
+   the only seam on the whole sheet. */
+.sidebar-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--panel-rule, rgba(26, 16, 6, 0.28));
+  padding-top: 0.6rem;
+}
+.sidebar-log .sidebar-heading {
+  flex: 0 0 auto;
+}
+
+.game-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* Was 0.82rem (13.12px) — the weakest, most-read text in the panel at
+     that size (measured 3.19:1 p5 contrast, the lowest of any element
+     here). Now reads the shared --sidebar-fs-body (1rem/16px); this is
+     the scale's biggest single win since it's what the player reads
+     most while playing. */
+  font-size: var(--sidebar-fs-body);
+  color: var(--panel-ink, #1a1006);
+  line-height: 1.45;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.game-log-list::-webkit-scrollbar { display: none; }
+/* No per-row hairline — ten identical border-tops read as a spreadsheet.
+   Spacing plus a very faint alternating tint carries the row rhythm
+   instead.
+   Horizontal padding was 0.3rem, but .sidebar-heading (and every other
+   heading/label in this panel) carries none — so log text sat ~4.8px
+   right of "Nhật ký ván chơi" above it instead of sharing its left edge.
+   Dropped to 0 horizontally (vertical rhythm kept) so the text's left
+   edge lines up with the headings. The alternating tint below is a
+   background on this same li box, so its width was never driven by this
+   padding — it already spans the full row (same width as the headings)
+   before and after this change, so dropping the padding makes the text
+   flush with the tint's existing edge rather than making the tint bleed
+   any wider. Chose flush over letting the tint bleed past the text on
+   purpose: bleeding it wider than the (now-aligned) text would make each
+   even row read like a hover/selected state instead of a quiet rhythm
+   cue. */
+.game-log-list li {
+  padding: 0.45rem 0;
+}
+.game-log-list li:nth-child(even) {
+  background: var(--panel-rule-faint, rgba(26, 16, 6, 0.12));
+}
+/* Card/disorder/player names emphasised via **…** markers (GameLogList.tsx)
+   get their emphasis from letterform — weight and small caps — not from a
+   colour. A single ink colour for every emphasised term kills the rainbow
+   the old teal-only accent produced. */
+.game-log-list strong {
+  font-weight: 800; /* inert — see file-top comment */
+  font-variant: small-caps;
+  color: var(--panel-ink, #1a1006);
+  /* Log text now reads --sidebar-fs-body (1rem/16px, up from the old
+     0.82rem/13.12px) — the headings' 0.5px stroke is tuned for their
+     20px small-caps and would blob shut the counters at this smaller
+     size. 0.3px is unchanged from before the rescale: growing the text
+     while holding the stroke steady only lightens its relative weight
+     (0.3px was ~2.3% of 13.12px, now ~1.9% of 16px), which is the
+     direction bigger text should move in, and it still reads as
+     emphasised against the plain body text around it. It's what
+     actually makes **card/player/disorder** names in the log read as
+     emphasised now that font-weight does nothing. */
+  -webkit-text-stroke: 0.3px var(--panel-ink, #1a1006);
+  paint-order: stroke fill;
+}

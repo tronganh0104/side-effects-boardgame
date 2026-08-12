@@ -1,0 +1,31 @@
+/* PsycheWard — style entry point. Order matters: tokens first, media queries last. */
+@import './fonts.css';
+@import './tokens.css';
+@import './base.css';
+/* theme-art.css only overrides body/body::before (base.css) and is placed
+   immediately after it — not at the tail, despite index.css's own "media
+   queries last" convention. responsive.css further down currently has an
+   unclosed comment (pre-existing, out of scope here — see its own file);
+   that malformed comment corrupts CSS parsing for everything textually
+   after it in this concatenated stylesheet, including an @import placed
+   at the end. Nothing between base.css and here redeclares `body` or
+   `body::before` (verified), so this position still wins the cascade
+   against base.css while staying immune to that downstream breakage. */
+@import './theme-art.css';
+@import './screens/setup.css';
+@import './screens/lobby.css';
+@import './screens/finished.css';
+@import './board/layout.css';
+@import './board/panel-surface.css';
+@import './board/sidebar.css';
+@import './board/card-preview.css';
+@import './board/chat.css';
+@import './board/psyche.css';
+@import './board/cards.css';
+@import './board/hand.css';
+@import './board/opponent-hand.css';
+@import './board/deck.css';
+@import './board/trade.css';
+@import './overlays.css';
+@import './animations.css';
+@import './responsive.css';

@@ -32,8 +32,11 @@ export function OpponentAvatarBar({
             id={`avatar-${opponent.id}`}
             type="button"
             className={`opponent-avatar ${isFocused ? 'focused' : ''} ${isTargeted ? 'targeted' : ''} ${opponent.id === currentPlayerId ? 'current-turn' : ''}`}
+            aria-pressed={isFocused}
+            title={isFocused ? t('watchingPlayer', { player: opponent.name }) : undefined}
             onClick={() => setFocusedOpponentId(opponent.id)}
           >
+            {isFocused && <span className="avatar-watching-dot" aria-hidden="true">👁</span>}
             <div className="avatar-icon">{opponent.name.slice(0, 1).toUpperCase()}</div>
             <div className="avatar-info">
               <strong>{opponent.name}</strong>

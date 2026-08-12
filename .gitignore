@@ -159,3 +159,7 @@ files/
 *.zip
 
 template.md
+.gstack/
+
+# Codex CLI session state (local only)
+.context/

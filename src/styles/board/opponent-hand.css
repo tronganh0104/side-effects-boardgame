@@ -1,0 +1,33 @@
+/* ── Watched opponent's face-down hand ──
+   Mirrors .own-hand (same row shape, same gap) but at a fraction of the card
+   size: the opponent zone is an `auto` grid row, so a full-height card row
+   here would be taken straight out of the self zone's 1fr. */
+:root {
+  --facedown-w: calc(var(--card-w) * 0.72);
+  --facedown-h: calc(var(--facedown-w) * var(--card-ratio));
+}
+.opponent-hand {
+  display: flex;
+  justify-content: safe center;
+  width: 100%;
+  overflow: hidden;
+  /* Extra breathing room below: the psyche row leads with its
+     treated/untreated pill, which otherwise sits right against the backs. */
+  margin-bottom: calc(var(--board-gap) * 0.75);
+}
+.opponent-hand .cards {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--hand-gap);
+  justify-content: safe center;
+  min-width: min-content;
+}
+.facedown-card {
+  width: var(--facedown-w);
+  height: var(--facedown-h);
+  flex: 0 0 auto;
+  border-radius: var(--card-radius);
+  border: 1px solid rgba(20, 184, 166, 0.4);
+  background: url('../../assets/cardback-512.webp') center / cover no-repeat;
+  box-shadow: 0 2px 6px #0007;
+}

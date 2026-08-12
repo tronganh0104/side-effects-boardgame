@@ -1,0 +1,407 @@
+/* ── Online lobby — room code / player list ──
+   The waiting-room card is now a sheet of the shared "aged apothecary
+   paper" (src/styles/board/panel-surface.css), the same material the
+   player sidebar uses — not a second paper look. OnlineLobby.tsx applies
+   `panel-surface panel-surface--framed` alongside the existing `panel
+   online-lobby` classes; panel-surface.css owns the texture, ink colours,
+   and seating shadow. This file owns layout, sizing, and every colour
+   decision that is specific to the lobby's own elements (room code,
+   badges, connection status, buttons).
+
+   font-weight is INERT everywhere below, same as sidebar.css: fonts.css
+   self-hosts Cormorant Garamond at weight 600 only and tokens.css sets
+   font-synthesis-weight: none, so 700/800 declarations compute and do
+   nothing. Actual emphasis comes from -webkit-text-stroke (in the text's
+   own ink colour, paint-order: stroke fill so the stroke doesn't fill the
+   small-caps counters), scaled to roughly 2.5-3% of the font size. */
+
+/* Type scale for this panel — Cormorant Garamond's x-height measures only
+   ~0.78x a normal UI font's at the same font-size, so sizes picked for a
+   normal-x-height face read small here. Every rule below reads one of
+   these four steps instead of inventing its own rem value:
+     --lobby-fs-micro  secondary/annotation text: badges, status, hints,
+                       the room-code label, the leave-room link.
+     --lobby-fs-body   primary reading text: player names, the connection
+                       line, the "waiting for host" message.
+     --lobby-fs-title  the single page heading ("Chơi trực tuyến").
+     --lobby-fs-code   the room code plate — the one thing on this screen
+                       that must dominate, so it gets its own step well
+                       clear of the other three rather than sharing one. */
+.online-lobby {
+  --lobby-fs-micro: 0.875rem;  /* 14px */
+  --lobby-fs-body: 1rem;       /* 16px */
+  --lobby-fs-title: 1.6rem;    /* 25.6px */
+  --lobby-fs-code: 2.4rem;     /* 38.4px */
+}
+
+/* Neutralise base.css's `.panel` glass-card look (navy --card-bg, blur,
+   a teal ::after glow) for this panel only — base.css is not this file's
+   to edit. `.panel` and `.panel-surface` share (0,1,0) specificity and
+   panel-surface.css loads AFTER base.css in index.css, so panel-surface's
+   own background-image/background-color/color longhands already win the
+   cascade on their own for every property panel-surface.css declares;
+   nothing here should re-touch `background` or `color`, or it would beat
+   panel-surface's texture by specificity instead of losing to it by
+   source order. Only `backdrop-filter` (which panel-surface.css never
+   sets) and the `::after` glow (a separate selector) need an explicit
+   kill here. border-radius: 0 matches the sidebar's framed panel, which
+   never sets a radius either — rounding the corners would fight the
+   frame's square 9-slice border-image. */
+.online-lobby.panel-surface {
+  backdrop-filter: none;
+  border-radius: 0;
+  padding: 1.5rem 1.75rem;
+}
+.online-lobby.panel-surface::after {
+  display: none;
+}
+
+.online-lobby-title {
+  display: block;
+  font-size: var(--lobby-fs-title);
+  color: var(--panel-ink);
+  margin-bottom: 1.1rem;
+  -webkit-text-stroke: 0.55px var(--panel-ink);
+  paint-order: stroke fill;
+}
+
+.lobby-back-btn {
+  background: none;
+  border: none;
+  color: var(--panel-ink-2);
+  opacity: 0.75;
+  font-size: var(--lobby-fs-micro);
+  padding: 0.3rem 0;
+  margin-bottom: 1rem;
+  min-height: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.online-lobby button.lobby-back-btn:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--panel-ink);
+  background: none;
+  box-shadow: none;
+}
+
+/* ── Room code plate ──
+   The room code is the single most important thing on this screen — read
+   aloud or copied to invite others — so it gets the biggest, boldest
+   treatment on the panel: --lobby-fs-code (well above the page title),
+   plus a stamped/engraved look (a debossed paper well, dark ink glyphs
+   with a 1px pale highlight underneath) rather than a bright accent
+   colour. Still plain selectable text — no image. */
+.room-code-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: color-mix(in srgb, var(--panel-ink) 8%, transparent);
+  border: 1px solid var(--panel-rule);
+  border-radius: 10px;
+  padding: 0.8rem 1.1rem;
+  margin-bottom: 0.9rem;
+  box-shadow:
+    inset 0 1px 3px rgba(26, 16, 6, 0.3),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+}
+/* "MÃ PHÒNG" — a micro-label reads as pressed-into-paper small caps, not
+   Tailwind's uppercase + wide tracking (which this used to be). */
+.room-code-card .lbl {
+  font-size: var(--lobby-fs-micro);
+  font-variant: small-caps;
+  letter-spacing: 0;
+  color: var(--panel-ink-2);
+  -webkit-text-stroke: 0.35px var(--panel-ink-2);
+  paint-order: stroke fill;
+  display: block;
+  margin-bottom: 0.15rem;
+}
+.room-code {
+  font-size: var(--lobby-fs-code);
+  letter-spacing: 0.12em;
+  color: var(--panel-ink);
+  text-shadow: 0 1px 0 var(--panel-paper-hi);
+  -webkit-text-stroke: 0.65px var(--panel-ink);
+  paint-order: stroke fill;
+  user-select: all;
+}
+.copy-btn {
+  background: color-mix(in srgb, var(--panel-ink) 6%, transparent);
+  border: 1px solid var(--panel-rule);
+  border-radius: 10px;
+  padding: 0.45rem 0.8rem;
+  font-size: var(--lobby-fs-micro);
+  color: var(--panel-ink-2);
+  min-height: unset;
+  transition: .18s;
+}
+.copy-btn:hover { color: var(--panel-ink); border-color: var(--panel-brass); }
+
+.conn-line {
+  font-size: var(--lobby-fs-body);
+  color: var(--panel-ink-2);
+  margin-bottom: 0.6rem;
+}
+.conn-line strong {
+  color: var(--panel-ink);
+  -webkit-text-stroke: 0.3px var(--panel-ink);
+  paint-order: stroke fill;
+}
+
+.lobby-players {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+.lobby-players li {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  background: color-mix(in srgb, var(--panel-ink) 6%, transparent);
+  border: 1px solid var(--panel-rule);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.9rem;
+}
+.player-avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800; /* inert — see file-top comment */
+  color: #02171a;
+  flex: 0 0 auto;
+  font-size: 0.9rem;
+  /* Never visible in practice — OnlineLobby.tsx always sets a per-player
+     hsl gradient inline so players stay tellable apart by colour, which
+     overrides this. Kept as a sane ink/brass fallback (not teal) in case
+     that inline style is ever removed. */
+  background: linear-gradient(135deg, var(--panel-brass), var(--panel-oxblood));
+}
+.player-name-wrap { font-size: var(--lobby-fs-body); color: var(--panel-ink); flex: 1; }
+
+/* "BẠN" and "Chủ" stay tellable apart by SHAPE, not hue: a filled solid
+   chip vs a hollow outlined one, plus the crown emoji on the host tag.
+   Brass fails the contrast contract as a text/fill colour (2.05:1) so it
+   only ever appears here as a thin ring; oxblood only appears as a full
+   fill with --panel-paper-hi text on top, which the contract measures at
+   7.49:1 — the one place a filled oxblood block is allowed to carry text. */
+.me-tag, .host-tag {
+  font-size: var(--lobby-fs-micro);
+  font-variant: small-caps;
+  letter-spacing: 0.01em;
+  padding: 0.08rem 0.5rem;
+  border-radius: 999px;
+  margin-left: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.me-tag {
+  background: var(--panel-oxblood);
+  color: var(--panel-paper-hi);
+  -webkit-text-stroke: 0.35px var(--panel-paper-hi);
+  paint-order: stroke fill;
+}
+.host-tag {
+  background: color-mix(in srgb, var(--panel-brass) 14%, transparent);
+  border: 1px solid var(--panel-brass);
+  color: var(--panel-ink);
+  -webkit-text-stroke: 0.3px var(--panel-ink);
+  paint-order: stroke fill;
+}
+
+/* Connected vs waiting already differ by glyph (● filled disc vs ○ hollow
+   ring, set in OnlineLobby.tsx) — the colour treatment adds a second,
+   independent cue within the ink family rather than reaching for green:
+   connected reads at full ink weight, waiting is dimmed and unstroked. */
+.player-status {
+  margin-left: auto;
+  font-size: var(--lobby-fs-micro);
+  color: var(--panel-ink-2);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+.player-status.connected {
+  color: var(--panel-ink);
+  opacity: 1;
+  -webkit-text-stroke: 0.25px var(--panel-ink);
+  paint-order: stroke fill;
+}
+
+.online-lobby .button-row {
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+/* The one thing on this screen the host actually wants pressed — filled
+   oxblood with --panel-paper-hi text (7.49:1, same verified combination
+   as the badge above), replacing base.css's teal gradient for this panel
+   only via a scoped override (base.css's `.primary` is shared with the
+   rest of the app and stays untouched). */
+.online-lobby .primary {
+  background: var(--panel-oxblood);
+  color: var(--panel-paper-hi);
+  border: 1px solid var(--panel-brass);
+  -webkit-text-stroke: 0.4px var(--panel-paper-hi);
+  paint-order: stroke fill;
+  box-shadow: 0 6px 16px rgba(26, 16, 6, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+.online-lobby .primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: 0 8px 20px rgba(26, 16, 6, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.waiting-host-msg {
+  text-align: center;
+  color: var(--panel-ink-2);
+  font-size: var(--lobby-fs-body);
+  margin: 0;
+}
+
+/* "Rời phòng" — demoted from a full-width twin of the primary button to a
+   quiet underlined text-action: still easy to find (it stays in the same
+   row, same reading position it always had), but visually subordinate so
+   the primary action is the one thing that reads as "press me". The
+   demotion comes entirely from size/shape (small, no fill, no border box,
+   not full-width) rather than from a weaker ink — measured live at this
+   position (near the frame's lower border) --panel-ink-2 only cleared
+   3.76:1, under the parchment asset's own local texture variance at that
+   spot, versus the 4.90:1 the file-mean baseline promises; --panel-ink
+   carries more headroom (5.46:1 baseline) and was verified live at this
+   exact spot (see report). Colour still escalates to oxblood on hover so
+   the destructive intent is legible without a red border box. */
+.online-lobby .btn-danger.leave-room-btn {
+  align-self: center;
+  width: auto;
+  min-height: unset;
+  background: none;
+  border: none;
+  padding: 0.3rem 0.6rem;
+  font-size: var(--lobby-fs-micro);
+  color: var(--panel-ink);
+  /* Without a stroke this measured only 4.22:1 live (still under AA even
+     after the ink-2 -> ink swap above): at 14px with no synthetic weight
+     at all (unlike every other ink text in this file) the true solid-ink
+     pixel fraction inside a tight crop is small enough that anti-aliased
+     edge tones, not pure ink, land at the 5th percentile. 0.35px (~2.5%
+     of size, this file's usual ratio) fixed it — see report for the
+     re-measured figure. */
+  -webkit-text-stroke: 0.35px var(--panel-ink);
+  paint-order: stroke fill;
+  text-decoration: underline;
+  text-decoration-color: var(--panel-rule);
+  text-underline-offset: 3px;
+}
+.online-lobby .btn-danger.leave-room-btn:hover:not(:disabled) {
+  color: var(--panel-oxblood);
+  text-decoration-color: var(--panel-oxblood);
+  background: none;
+  box-shadow: none;
+}
+
+.lobby-hint {
+  margin-top: 0.6rem;
+  text-align: center;
+  font-size: var(--lobby-fs-micro);
+  color: var(--panel-ink-2);
+  opacity: 0.85;
+}
+
+/* Generic button chrome (base.css) glows teal on hover/focus everywhere
+   in the app; scoped here so every button inside the lobby (Copy, Vào,
+   Bắt đầu, Rời phòng) escalates into the brass/oxblood family instead. */
+.online-lobby button:hover:not(:disabled),
+.online-lobby button:focus-visible {
+  border-color: var(--panel-brass);
+  background: color-mix(in srgb, var(--panel-brass) 18%, transparent);
+  box-shadow: 0 0 10px rgba(26, 16, 6, 0.25);
+}
+
+.online-lobby .btn-join {
+  flex: 0 0 auto;
+  padding: 0 1.2rem;
+  background: var(--panel-oxblood);
+  color: var(--panel-paper-hi);
+  border: 1px solid var(--panel-brass);
+  border-radius: var(--radius-sm);
+  -webkit-text-stroke: 0.3px var(--panel-paper-hi);
+  paint-order: stroke fill;
+}
+.online-lobby .btn-join:hover:not(:disabled) {
+  filter: brightness(1.1);
+  background: var(--panel-oxblood);
+  box-shadow: 0 0 10px rgba(26, 16, 6, 0.3);
+}
+
+.online-lobby .room-code-input {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  text-align: center;
+}
+
+/* ── Lobby + chat layout ──
+   setup.css sizes .online-lobby (34rem) for a player-list-only card. Once
+   the chat panel sits beside that list, splitting 34rem's ~445px content
+   box in two leaves each column too narrow for a player row to keep its
+   name, host badge, and connection status on one line — the row wraps
+   instead. Widening the card only `.has-chat` keeps the pre-chat lobby's
+   look exactly as it was. 860px total gives each column a floor above the
+   300px+ a Vietnamese "● Đã kết nối" row actually needs. */
+@media (min-width: 801px) {
+  .online-lobby.has-chat { width: min(100%, 860px); }
+}
+
+.lobby-body {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+/* min-width is the floor that keeps a player row on one line (measured,
+   not eyeballed — see the design doc's measurement table); flex-basis is
+   just a starting point before the two columns grow to fill the wider
+   card above. */
+.lobby-body .lobby-players {
+  flex: 1 1 300px;
+  min-width: 280px;
+}
+.lobby-body .chat-panel {
+  flex: 1 1 320px;
+  min-width: 280px;
+  /* chat.css's own .chat-panel comment already flags this: a standalone
+     context like the lobby has no ancestor to bound the panel's height, so
+     it hardcodes 22rem. That was taller than an idle lobby thread needs —
+     with a near-empty thread the message area flex-grew into empty space
+     and stranded the composer, and the whole row (bounded by this column,
+     not the shorter player list beside it) read as one big void below the
+     player list. Sizing to content (height: auto) with a floor (min-height,
+     so zero messages doesn't collapse the panel below room for its own
+     heading + composer) and a cap (max-height, so a long thread scrolls
+     instead of pushing the leave link toward the fold) fixes both without
+     touching chat.css, which the sidebar and drawer placements still rely
+     on. 9rem/14rem (down from 14rem/20rem) is the tightened floor/ceiling —
+     measured live: heading ~28.8px + composer ~30.8px + two 8px gaps =
+     ~75.6px of fixed chrome, leaving ~68px for the message area at the
+     floor — enough for the empty-state line or a couple of short messages
+     without the panel ballooning past what an idle lobby thread needs. */
+  height: auto;
+  min-height: 9rem;
+  max-height: 14rem;
+}
+
+/* Below this the card is already full-width (responsive.css's mobile
+   rule), so there's no room left for two columns — stack chat under the
+   player list instead of crushing both. 800px matches the mobile
+   breakpoint used everywhere else (chat.css, responsive.css). */
+@media (max-width: 800px) {
+  .lobby-body { flex-direction: column; }
+  .lobby-body .lobby-players,
+  .lobby-body .chat-panel {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+  }
+}

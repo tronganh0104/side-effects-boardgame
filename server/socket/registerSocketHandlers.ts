@@ -1,8 +1,11 @@
 import type { Server, Socket } from 'socket.io'
+import { createChatGateway } from '../chat/chatGateway'
 import { createPlayerView } from '../game/playerView'
 import type { GameCommand } from '../game/commands'
 import { RoomService } from '../rooms/roomService'
 import type { Room } from '../rooms/types'
+import { createTradeGateway } from '../trade/tradeGateway'
+import { lockableCardId } from '../trade/lockedCardGuard'
 
 interface Session {
   roomId: string
@@ -132,6 +135,8 @@ export function parseDecisionPayload(payload: unknown): {
 
 export function registerSocketHandlers(io: Server, rooms: RoomService): void {
   const sessions = new Map<string, Session>()
+  const chat = createChatGateway({ io, rooms })
+  const trade = createTradeGateway({ io, rooms })
 
   const roomState = (room: Room) => ({
     id: room.id,
@@ -170,6 +175,9 @@ export function registerSocketHandlers(io: Server, rooms: RoomService): void {
   }
 
   io.on('connection', (socket) => {
+    chat.attach(socket, () => activeSession(socket), (error) => fail(socket, error))
+    trade.attach(socket, () => activeSession(socket), (error) => fail(socket, error))
+
     socket.on('room:create', (payload: unknown) => {
         try {
           const { displayName } = parseRoomCreatePayload(payload)
@@ -237,6 +245,10 @@ export function registerSocketHandlers(io: Server, rooms: RoomService): void {
         const room = rooms.leaveRoom(session.roomId, session.playerId)
         sessions.delete(socket.id)
         socket.leave(session.roomId)
+        // A player leaving invalidates any trade session in this room (spec
+        // section 6.3): the two seats a session assumes may no longer both
+        // be occupied.
+        trade.closeRoomSessions(session.roomId, 'cancelled')
         socket.emit('room:left')
         if (room) broadcastRoom(room)
       } catch (error) {
@@ -248,8 +260,23 @@ export function registerSocketHandlers(io: Server, rooms: RoomService): void {
       try {
         const session = activeSession(socket)
         const command = parseGameCommandPayload(payload)
-        rooms.executeCommand(session.roomId, session.playerId, command)
+        // Spec section 6.1: a card placed into a trade slot must not be
+        // playable or discardable while the session is open, or the other
+        // side can confirm against a card that no longer exists. This is a
+        // UX guard only — the engine still re-validates at commit time.
+        const targetedCardId = lockableCardId(command)
+        if (targetedCardId && trade.isCardLocked(session.playerId, targetedCardId))
+          throw new Error(
+            'Lá bài này đang được đặt trong một phiên trao đổi, hãy rút ra trước khi sử dụng.',
+          )
+        const beforePlayerId = rooms.getRoom(session.roomId)?.gameState?.currentPlayerId
+        const nextGame = rooms.executeCommand(session.roomId, session.playerId, command)
         const room = rooms.getRoom(session.roomId)!
+        // Spec section 6.3: a trade session becomes invalid once the current
+        // turn ends or the game finishes, since it was negotiated against a
+        // hand state that may no longer hold.
+        if (nextGame.status === 'finished' || nextGame.currentPlayerId !== beforePlayerId)
+          trade.closeRoomSessions(session.roomId, 'cancelled')
         broadcastRoom(room)
         broadcastGame(room)
       } catch (error) {
@@ -261,13 +288,16 @@ export function registerSocketHandlers(io: Server, rooms: RoomService): void {
         try {
           const session = activeSession(socket)
           const { decisionId, choiceIds } = parseDecisionPayload(payload)
-          rooms.resolveDecision(
+          const beforePlayerId = rooms.getRoom(session.roomId)?.gameState?.currentPlayerId
+          const nextGame = rooms.resolveDecision(
             session.roomId,
             session.playerId,
             decisionId,
             choiceIds,
           )
           const room = rooms.getRoom(session.roomId)!
+          if (nextGame.status === 'finished' || nextGame.currentPlayerId !== beforePlayerId)
+            trade.closeRoomSessions(session.roomId, 'cancelled')
           broadcastRoom(room)
           broadcastGame(room)
         } catch (error) {
@@ -278,6 +308,8 @@ export function registerSocketHandlers(io: Server, rooms: RoomService): void {
     socket.on('disconnect', () => {
       const session = sessions.get(socket.id)
       sessions.delete(socket.id)
+      chat.release(socket.id)
+      trade.release(socket.id)
       if (!session) return
       try {
         const room = rooms.markDisconnected(

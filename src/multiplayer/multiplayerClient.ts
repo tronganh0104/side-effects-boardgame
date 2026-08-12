@@ -1,6 +1,9 @@
 import { io, type Socket } from 'socket.io-client'
+import type { ChatMessage } from '../../server/chat/types'
 import type { GameCommand } from '../../server/game/commands'
 import type { PlayerGameView } from '../../server/game/playerView'
+import type { TradeClosedPayload, TradeStatePayload } from '../game/trade/types'
+import { useTradeStore } from '../store/tradeStore'
 
 export const SESSION_KEY = 'side-effect.room-session'
 export const multiplayerServerUrl =
@@ -33,6 +36,7 @@ export interface MultiplayerClientHandlers {
   onGameLog?: (entries: string[]) => void
   onConnectionState?: (state: ConnectionState) => void
   onRoomLeft?: () => void
+  onChatMessage?: (message: ChatMessage) => void
 }
 
 function storage(): Storage | undefined {
@@ -81,6 +85,17 @@ export function createMultiplayerClient(
     handlers.onError?.(message)
   })
   if (handlers.onGameLog) socket.on('game:log', handlers.onGameLog)
+  if (handlers.onChatMessage) socket.on('chat:message', handlers.onChatMessage)
+  // Trade negotiation state is routed straight into tradeStore rather than
+  // through a handlers callback (contrast onChatMessage above): the store
+  // already mirrors trade:state 1:1, so there is nothing for a consuming
+  // component to do with the payload except hand it to the store.
+  socket.on('trade:state', (payload: TradeStatePayload) =>
+    useTradeStore.getState().applyState(payload),
+  )
+  socket.on('trade:closed', (payload: TradeClosedPayload) =>
+    useTradeStore.getState().applyClosed(payload),
+  )
   socket.on('session:restored', (session: MultiplayerSession) => {
     saveSession(session)
     resumingSession = false
@@ -118,5 +133,15 @@ export function createMultiplayerClient(
     sendCommand: (command: GameCommand) => socket.emit('game:command', command),
     resolveDecision: (decisionId: string, choiceIds: string[]) =>
       socket.emit('game:decision', { decisionId, choiceIds }),
+    sendChat: (text: string) => socket.emit('chat:send', { text }),
+    inviteTrade: (targetPlayerId: string) =>
+      socket.emit('trade:invite', { targetPlayerId }),
+    acceptTrade: () => socket.emit('trade:accept'),
+    declineTrade: () => socket.emit('trade:decline'),
+    placeTradeCard: (cardInstanceId: string) =>
+      socket.emit('trade:place', { cardInstanceId }),
+    clearTradeCard: () => socket.emit('trade:clear'),
+    confirmTrade: () => socket.emit('trade:confirm'),
+    cancelTrade: () => socket.emit('trade:cancel'),
   }
 }

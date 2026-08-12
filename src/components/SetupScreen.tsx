@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { t } from '../i18n'
+import logo480 from '../assets/logo-480.webp'
+import logo900 from '../assets/logo-900.webp'
 
 interface SetupScreenProps {
   error?: string
@@ -13,11 +15,23 @@ export function SetupScreen({ error, onStart }: SetupScreenProps) {
 
   return (
     <main className="setup-screen">
-      <section className="panel">
-        <h1 className="gradient-text">{t('title')}</h1>
-        <p style={{ color: 'var(--text-faint)', fontSize: '0.9rem', marginBottom: '1.4rem', marginTop: '0.15rem', fontWeight: 600 }}>
-          {t('localGame')}
-        </p>
+      <section className="panel panel-surface panel-surface--framed">
+        {/* Same reasoning as HomeScreen.tsx: the logo art already spells out
+            "SIDE EFFECTS", so it replaces the old teal-gradient text title
+            rather than getting its own plain-ink restyle — one title
+            treatment for both screens instead of two. The h1 stays for
+            accessibility/SEO; the image is decorative. */}
+        <h1 className="visually-hidden">{t('title')}</h1>
+        <img
+          className="logo-mark"
+          src={logo900}
+          srcSet={`${logo480} 480w, ${logo900} 900w`}
+          sizes="168px"
+          width={900}
+          height={600}
+          alt=""
+        />
+        <p className="setup-subtitle">{t('localGame')}</p>
 
         {names.map((name, index) => (
           <label className="name-field" key={`player-${index + 1}`}>

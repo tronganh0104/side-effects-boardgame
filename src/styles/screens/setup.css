@@ -1,0 +1,299 @@
+/* ── Setup / Home screens ──
+   Home and local-setup panels sit on the "aged apothecary paper" material
+   (panel-surface.css): parchment texture, ink text, brass/oxblood accents.
+   This file owns their layout, typography, and the Tailwind-era controls
+   (buttons/inputs/labels) that render inside them; panel-surface.css owns
+   the paper itself (background image, ink colours, seating shadow) via the
+   `panel-surface`/`panel-surface--framed` mixin classes applied in
+   HomeScreen.tsx/SetupScreen.tsx. This file does not redeclare any of
+   panel-surface.css's --panel-* custom properties, only consumes them.
+
+   Type scale: Cormorant Garamond's x-height is ~0.78x a normal UI font's
+   (measured on the sidebar, canvas actualBoundingBoxAscent 39 vs 50 per
+   100px), so sizes written for the old Tailwind scale render ~22% small.
+   Rather than the eight ad-hoc rem values this file used to carry
+   (0.72/0.78/0.87/0.9/0.92/1/1.05rem — five of them within 1px of each
+   other), every visible text node here reads from one of three sizes,
+   matching the sidebar's own already-corrected scale:
+     --setup-fs-micro   labels, captions, the player counter, button sub-text
+     --setup-fs-body    inputs, buttons, error text
+     --setup-fs-display the home screen's tagline (the single most
+                         prominent text on either screen, short of the logo)
+*/
+:root {
+  --setup-fs-micro: 0.875rem;
+  --setup-fs-body: 1rem;
+  --setup-fs-display: 1.18rem;
+}
+
+.setup-screen {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 1.5rem;
+  position: relative;
+  z-index: 1;
+}
+.setup-screen .panel { width: min(100%, 28rem); }
+.online-lobby { width: min(100%, 34rem); }
+
+/* Neutralise base.css's dark-glass `.panel` for these paper panels: its
+   `background: var(--card-bg)` shorthand and teal `::after` radial glow
+   are wrong for parchment. Scoped to the compound `.panel.panel-surface`
+   (specificity 0,2,0) so it wins over both `.panel` (base.css) and
+   `.panel-surface` (panel-surface.css) regardless of import order, and so
+   plain `.panel` users elsewhere (e.g. GameBoard.tsx's decision modal)
+   keep the original dark-glass look — base.css itself stays untouched.
+   background/color/box-shadow are deliberately NOT restated here: for
+   those specific longhands, panel-surface.css already wins its (0,1,0) vs
+   (0,1,0) tie against base.css's `.panel` by source order (panel-surface.css
+   is the later import in index.css) — the same reasoning sidebar.css
+   documents for `.player-sidebar`. Restating them would mean hardcoding
+   the parchment asset path a second time for no visual gain. Only the
+   glow (nothing else overrides `.panel::after`) and the blur (pointless
+   once the background is fully opaque) need an explicit kill. border-radius
+   is reset to 0: the brass frame's corner flourishes assume a rectangular
+   box, same as the sidebar's unrounded frame. */
+.panel.panel-surface {
+  border-radius: 0;
+  backdrop-filter: none;
+}
+.panel.panel-surface::after {
+  content: none;
+}
+
+/* Logo mark — the title art itself (see HomeScreen.tsx/SetupScreen.tsx),
+   not a box around an emoji. min(100%, 300px) keeps it inside the panel's
+   content box at every breakpoint (measured down to the 800px mobile
+   panel, whose narrower padding leaves less room than the desktop 28rem
+   panel). */
+.logo-mark {
+  display: block;
+  width: min(100%, 300px);
+  height: auto;
+  margin: 0 auto 0.9rem;
+}
+/* SetupScreen reuses the same mark as its title, in place of the old
+   teal-gradient "Side Effect" text (one title treatment, not two) — but
+   its panel has a player-name form under the mark, so it runs smaller
+   than the home screen's splash-sized one to leave room for that form. */
+.setup-screen .panel:not(.home-screen) .logo-mark {
+  width: min(100%, 168px);
+  margin-bottom: 0.6rem;
+}
+
+.home-screen { text-align: center; }
+.home-screen .tagline {
+  color: var(--panel-ink-2, #261b14);
+  font-size: var(--setup-fs-display);
+  font-style: italic;
+  margin-bottom: 1.6rem;
+}
+.home-screen .divider { height: 1px; background: var(--panel-rule, rgba(26, 16, 6, 0.28)); margin: 1.4rem 0; }
+
+.setup-subtitle {
+  color: var(--panel-ink-2, #261b14);
+  font-size: var(--setup-fs-micro);
+  margin-bottom: 1.4rem;
+  margin-top: 0.15rem;
+}
+
+.button-row { display: flex; flex-direction: column; gap: 0.7rem; margin-top: 1rem; }
+.home-screen .button-row { flex-direction: column; }
+.button-row .btn-sub {
+  display: block;
+  font-size: var(--setup-fs-micro);
+  opacity: 0.75;
+  margin-top: 0.1rem;
+}
+
+
+/* ── Buttons ──
+   base.css's plain `button`/`.primary` are teal-on-navy; both are
+   overridden here scoped to `.button-row` (the home + local-setup
+   actions), at a specificity base.css's rules cannot win regardless of
+   source order, so nothing outside this row is touched.
+   font-weight is inert (fonts.css ships one weight only — see tokens.css's
+   font-synthesis-weight: none), so the primary label's emphasis is
+   synthesised with a same-colour text-stroke instead of the dead
+   font-weight: 800 base.css sets. 0.45px is ~2.8% of the 16px button text
+   — inside the 2.5-3% band that reads as emphasis without filling any
+   letterform detail (the button label isn't small-caps, so there are no
+   counters to worry about here). */
+.button-row .primary {
+  background: var(--panel-oxblood, #5c2119);
+  color: var(--panel-paper-hi, #dcc5af);
+  border: 2px solid var(--panel-brass, #76512f);
+  box-shadow: 0 10px 22px rgba(26, 16, 6, 0.35);
+  -webkit-text-stroke: 0.45px var(--panel-paper-hi, #dcc5af);
+  paint-order: stroke fill;
+}
+.button-row .primary:hover:not(:disabled),
+.button-row .primary:focus-visible {
+  filter: brightness(1.08);
+  box-shadow:
+    0 12px 26px rgba(26, 16, 6, 0.45),
+    0 0 0 3px color-mix(in srgb, var(--panel-brass, #76512f) 35%, transparent);
+}
+
+.button-row button:not(.primary) {
+  background: var(--panel-paper-hi, #dcc5af);
+  color: var(--panel-ink, #1a1006);
+  border: 2px solid var(--panel-brass, #76512f);
+}
+.button-row button:not(.primary):hover:not(:disabled),
+.button-row button:not(.primary):focus-visible {
+  background: color-mix(in srgb, var(--panel-brass, #76512f) 14%, var(--panel-paper-hi, #dcc5af));
+  border-color: var(--panel-oxblood, #5c2119);
+}
+
+
+/* ── Form elements ── */
+.name-field {
+  display: block;
+  margin-bottom: 1rem;
+}
+/* Letterpress micro-label, not the generic uppercase-letterspaced
+   micro-label pasted onto every dark-mode UI: small-caps instead of
+   text-transform (never both — small-caps already reads as a distinct
+   register on its own; stacking uppercase on top just shouts). The
+   text-stroke stands in for the dead font-weight: 700 this used to carry;
+   0.35px is ~2.5% of the 14px label, comfortably under the 0.7px that
+   starts filling small-caps counters at roughly this size. */
+.name-field > span.label {
+  color: var(--panel-ink-2, #261b14);
+  font-size: var(--setup-fs-micro);
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+  -webkit-text-stroke: 0.35px var(--panel-ink-2, #261b14);
+  paint-order: stroke fill;
+  margin-bottom: 0.35rem;
+  display: block;
+}
+.input-row { display: flex; gap: 0.5rem; }
+.input-row input, .field-input {
+  flex: 1;
+  width: 100%;
+  background: var(--panel-paper-hi, #dcc5af);
+  border: 1px solid var(--panel-brass, #76512f);
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.9rem;
+  color: var(--panel-ink, #1a1006);
+  font-size: var(--setup-fs-body);
+  transition: border-color .18s, box-shadow .18s;
+}
+.input-row input:focus, .field-input:focus {
+  outline: none;
+  border-color: var(--panel-oxblood, #5c2119);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--panel-brass, #76512f) 30%, transparent);
+}
+/* ink (#1a1006) at 65% alpha over the paper-hi field (#dcc5af): measured
+   4.74:1 against that field — legible, but well below the 11.3:1 of real
+   input text, so the field still reads as empty rather than pre-filled. */
+.input-row input::placeholder, .field-input::placeholder { color: rgba(26, 16, 6, 0.65); }
+
+.icon-btn {
+  width: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-paper-hi, #dcc5af);
+  border: 1px solid var(--panel-brass, #76512f);
+  color: var(--panel-ink-2, #261b14);
+  font-size: var(--setup-fs-body);
+  transition: .18s;
+  display: grid;
+  place-items: center;
+  min-height: unset;
+  padding: 0;
+}
+/* The danger cue moves to the oxblood family without breaking the paper
+   contrast contract: oxblood measures only 3.39:1 directly on the paper
+   tones (fails AA as text), so the glyph stays ink-2 and the "red" signal
+   lives in the border plus a light oxblood-into-paper-hi wash instead
+   (measured 8.0:1 for ink-2 on that wash — nowhere near the risk zone). */
+.icon-btn:hover:not(:disabled) {
+  border-color: var(--panel-oxblood, #5c2119);
+  background: color-mix(in srgb, var(--panel-oxblood, #5c2119) 14%, var(--panel-paper-hi, #dcc5af));
+}
+.icon-btn:focus-visible {
+  outline: none;
+  border-color: var(--panel-oxblood, #5c2119);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--panel-brass, #76512f) 30%, transparent);
+}
+
+.player-count {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: var(--setup-fs-micro);
+  color: var(--panel-ink-2, #261b14);
+}
+.player-count strong {
+  color: var(--panel-ink, #1a1006);
+  -webkit-text-stroke: 0.3px var(--panel-ink, #1a1006);
+  paint-order: stroke fill;
+}
+
+/* Error text stays ink — never oxblood/brass directly on paper, per the
+   contrast contract — with the "red" signal carried by a light oxblood
+   wash chip and a solid oxblood rule instead of the text colour. Measured:
+   ink (#1a1006) on a 12%-oxblood-into-paper wash (~#967b5f) is 4.73:1,
+   clearing AA; the old #ffb4a8-on-slate combination is gone entirely. */
+.error {
+  color: var(--panel-ink, #1a1006);
+  background: color-mix(in srgb, var(--panel-oxblood, #5c2119) 12%, var(--panel-paper-tint, #9e8769));
+  border-left: 3px solid var(--panel-oxblood, #5c2119);
+  padding: 0.5rem 0.7rem;
+  margin-top: 0.75rem;
+  font-size: var(--setup-fs-body);
+  -webkit-text-stroke: 0.4px var(--panel-ink, #1a1006);
+  paint-order: stroke fill;
+}
+
+.game-error-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(2, 6, 23, 0.72);
+}
+
+/* This modal overlays live gameplay (rendered from GameBoard.tsx, which
+   this file's owned components do not include) on a dark scrim, not the
+   parchment setup/home screens — and GameBoard.tsx's markup can't be
+   given the panel-surface class from here. Rather than hand-roll a second
+   paper implementation with hardcoded hex — exactly what panel-surface.css
+   asks consumers not to do — this stays dark glass, matching the sibling
+   in-game modal (.decision-modal, overlays.css) exactly.
+   That also fixes the two real bugs here: var(--radius-lg) and var(--panel)
+   are declared nowhere in the codebase (grepped, zero hits for both), so
+   border-radius fell back to 0 (square corners) and background fell back
+   to transparent (a see-through box floating over the scrim, with only
+   its red border visible). --radius/--card-bg are the same tokens
+   .decision-modal already uses for the same situation. */
+.game-error-panel {
+  width: min(100%, 26rem);
+  padding: 1.4rem;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.game-error-panel h2 { margin: 0 0 0.5rem; color: #fecaca; }
+.game-error-panel p { margin: 0 0 1rem; color: var(--text-muted); }
+.turn-hint { color: #fde68a; text-align: center; margin: 0 0 0.7rem; }
+
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 1.3rem 0;
+}
+.or-divider::before, .or-divider::after { content: ""; flex: 1; height: 1px; background: var(--card-border); }

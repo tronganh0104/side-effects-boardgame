@@ -1,0 +1,154 @@
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  color: var(--text);
+  min-height: 100dvh;
+  background: radial-gradient(ellipse at top, var(--bg-from) 0%, var(--bg-to) 100%) fixed;
+  position: relative;
+  font-weight: 400;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  overflow-x: hidden;
+}
+
+/* Subtle dot-grid texture */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  z-index: 0;
+  background-image: radial-gradient(circle at 50% 50%, #fff 1px, transparent 1.5px);
+  background-size: 44px 44px;
+}
+
+a { text-decoration: none; color: inherit; }
+button, input, select { font: inherit; font-weight: 500; }
+
+
+/* ── Accessibility ── */
+/* Keeps content in the accessibility tree and readable by search engines
+   without rendering it — standard "sr-only" clip pattern. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+/* ── Buttons ── */
+button {
+  min-height: 2.75rem;
+  cursor: pointer;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 1.1rem;
+  background: var(--input-bg);
+  color: var(--text-strong);
+  transition: border-color .18s, transform .18s, background .18s, opacity .18s, box-shadow .18s;
+}
+/* Brass hover/focus ring, not teal — walnut/apothecary palette (see
+   chat.css / panel-surface.css's contract). rgb(118, 81, 47) is brass; this
+   generic ring is what every button not explicitly restyled by a screen's
+   own stylesheet (setup.css, lobby.css, chat.css) falls back to, so it must
+   already be in the target palette, not the old Tailwind teal. */
+button:hover:not(:disabled), button:focus-visible {
+  border-color: rgba(118, 81, 47, 0.5);
+  background: rgba(255,255,255,0.08);
+  box-shadow: 0 0 10px rgba(118, 81, 47, 0.2);
+}
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { cursor: not-allowed; opacity: 0.42; }
+
+/* Filled oxblood / paper-hi text — the one pairing the palette contract
+   verifies at 7.49:1 (#dcc5af on #5c2119), reused here instead of the old
+   teal gradient so every un-restyled `.primary` (DecisionModal, TradePanel,
+   FinishedScreen — none of which override this) still reads as the current
+   walnut/apothecary palette rather than the previous design's teal.
+   setup.css and lobby.css already override this class for their own paper
+   panels via higher-specificity scoped selectors (`.button-row .primary`,
+   `.online-lobby .primary`); this is only the fallback for everything else.
+   font-weight: 800 is inert (fonts.css self-hosts one weight; tokens.css
+   sets font-synthesis-weight: none) — kept harmless, stroke does the real
+   work. */
+.primary {
+  background: #5c2119;
+  color: #dcc5af;
+  border: 1px solid #76512f;
+  font-weight: 800;
+  -webkit-text-stroke: 0.45px #dcc5af;
+  paint-order: stroke fill;
+  box-shadow: 0 10px 26px rgba(26, 16, 6, 0.35);
+}
+.primary:hover:not(:disabled) {
+  background: #5c2119;
+  filter: brightness(1.08);
+  box-shadow: 0 14px 32px rgba(26, 16, 6, 0.45);
+}
+
+/* Opaque oxblood fill, not a 90%-transparent red-500 wash — the old
+   background contributed nothing (text-vs-own-fill contrast was 1:1), so
+   legibility depended entirely on whatever sat behind the button. Still
+   reads as destructive, just within the walnut/apothecary oxblood family
+   instead of Tailwind red-500. Background/border are restated on :hover
+   because the generic `button:hover:not(:disabled)` rule above outranks
+   this class on specificity for any property it also sets (0,2,1 vs
+   0,1,0) — without restating them here, hovering would silently swap the
+   opaque fill back for that rule's translucent white wash. */
+.btn-danger {
+  background: #5c2119;
+  color: #dcc5af;
+  border: 1px solid #76512f;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #5c2119;
+  border-color: #dcc5af;
+  filter: brightness(1.12);
+}
+
+
+/* ── Glass panel ── */
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 2rem 2.2rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Warm brass vignette, not teal — setup.css and lobby.css already kill
+     this glow entirely for their own paper panels (`content: none`, scoped
+     to `.panel.panel-surface` / `.online-lobby.panel-surface`), so this only
+     ever renders on panels neither of them touches: AudioSettings' popover,
+     GameLogDrawer, and DecisionModal/TradePanel/FinishedScreen's plain
+     `.panel` surfaces, plus (until chat.css's own `.chat-drawer` rule paints
+     over it) the mobile chat drawer, which also carries the bare `panel`
+     class. */
+  background: radial-gradient(circle at 50% -10%, rgba(118,81,47,.12), transparent 50%);
+}
+.panel > * { position: relative; z-index: 1; }
+
+
+/* ── Gradient text ── */
+.gradient-text, h1.gradient {
+  background: linear-gradient(90deg, #f8fafc, var(--teal) 55%, var(--green));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  display: inline-block;
+}

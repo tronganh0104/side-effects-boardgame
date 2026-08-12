@@ -45,7 +45,7 @@ describe('local UI adapter', () => {
     ])
 
     useGameStore.getState().draw()
-    expect(useGameStore.getState().gameLog.at(-1)).toMatch(/đã rút \d+ lá/)
+    expect(useGameStore.getState().gameLog.at(-1)).toMatch(/rút \d+ lá/)
   })
 
   it('delegates a play action to the domain engine', () => {

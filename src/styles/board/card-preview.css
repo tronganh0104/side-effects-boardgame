@@ -1,0 +1,163 @@
+/* ============================================================
+   CARD INFO PANEL — left-sidebar hover/focus card preview
+   ============================================================
+   Desktop-only: responsive.css sets `.player-sidebar { display: none }`
+   under 801px, so this panel doesn't exist on phones at all — no mobile
+   rules live in this file.
+
+   Renders in the same fixed-height shell whether nothing has been hovered
+   yet (.card-info-panel--empty) or a card is shown, so mounting/replacing
+   its content never shifts SelfStatusPanel or the log beneath it in
+   .player-sidebar (a flex column — see sidebar.css, which this file does
+   NOT edit, only reads --panel-* custom properties from via inheritance).
+
+   No thumbnail any more (see CardInfoPanel.tsx) — at the ~51px this column
+   ever had to give it, the baked card text was an unreadable smudge and it
+   only duplicated art already on the real card. Removing it frees the
+   entire box for the text this panel exists to show.
+
+   height: measured live (Playwright), hovering all 17 distinct
+   definitionIds via keyboard focus (CardButton's onFocus, same path the
+   hover context already documents) at three viewports: 1920x1080 and
+   1366x768 (the two this file used to check) PLUS 810x1200 — a
+   narrow-and-TALL window, because sidebar.css's own type-scale comment
+   already found (for the sidebar heading, same content-width budget) that
+   the true worst case for available width is not the short-narrow window
+   naive testing reaches for, it's a narrow one that is also TALL:
+   --sidebar-w floors on viewport *width* at 208px, but the padding derived
+   from --zone-pad floors on viewport *height* and keeps growing until
+   ~1143px of viewport height — so a tall window pins width at its floor
+   while still paying the larger padding. Measured .card-info-panel width:
+   224.9px at 1920x1080, 153.6px at 1366x768, 144px at 810x1200 — confirming
+   that comment's finding still holds for this panel's own container (144px
+   is narrower than 1366's 153.6px despite both being "just above 801px" in
+   spirit, purely because of the added height).
+
+   For each of the 17 cards, at each viewport, the panel's OWN natural
+   height was measured directly (temporarily setting height:auto/
+   overflow:visible and reading getBoundingClientRect(), not inferred from
+   .card-info-body alone, so the heading + margins + padding-bottom this
+   rule also owns are included). True worst case across all 51 samples:
+   Therapy's two-paragraph body at 1366x768, 219px (218.8px at 810x1200,
+   effectively the same) — taller than any 3-side-effect Drug (212px at
+   every width) because Therapy's two full-sentence paragraphs wrap harder
+   than three short disorder names ever do, even one-per-row. 15rem (240px)
+   clears that 219px true max with a 21px margin — small enough to still be
+   a real reduction from the old 256px guess, wide enough to absorb minor
+   cross-browser font-metric drift. overflow-y stays on as a safety net for
+   any future longer string, not as the normal path. */
+.card-info-panel {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: 15rem;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--panel-rule, rgba(26, 16, 6, 0.28));
+}
+.card-info-panel::-webkit-scrollbar { display: none; }
+
+.card-info-placeholder {
+  margin: 0.3rem 0 0;
+  font-size: var(--sidebar-fs-meta, 0.875rem);
+  color: var(--panel-ink-2, #261b14);
+  font-style: italic;
+}
+
+/* One column, no art rail: name first as the block's own heading, then each
+   field (episode effect / treats / side effects / instructions) stacked
+   below it with its own caption. Reads top-to-bottom like a prescription
+   label rather than a card-shaped chip with text wedged beside it. */
+.card-info-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-height: 0;
+  margin-top: 0.3rem;
+}
+.card-info-name {
+  font-size: var(--sidebar-fs-body, 1rem);
+  color: var(--panel-ink, #1a1006);
+  -webkit-text-stroke: 0.32px var(--panel-ink, #1a1006);
+  paint-order: stroke fill;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--panel-rule-faint, rgba(26, 16, 6, 0.12));
+}
+/* Caption-over-value, not label-then-value run into one line: at the 142px
+   floor "Điều trị Trầm cảm" as running text reads as one blurred phrase,
+   while a small-caps caption on its own line followed by the value in the
+   larger reading size gives the two an unambiguous, consistent hierarchy
+   regardless of width. */
+.card-info-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.card-info-label {
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+  font-size: var(--sidebar-fs-meta, 0.875rem);
+  color: var(--panel-ink-2, #261b14);
+}
+.card-info-text,
+.card-info-note {
+  margin: 0;
+  font-size: var(--sidebar-fs-body, 1rem);
+  color: var(--panel-ink, #1a1006);
+  line-height: 1.3;
+}
+.card-info-note {
+  font-style: italic;
+  font-size: var(--sidebar-fs-meta, 0.875rem);
+  color: var(--panel-ink-2, #261b14);
+}
+/* Full-width stacked rows, not wrapped inline chips: at the 142px floor,
+   "Rối loạn cương dương" alone is wider than the column, so inline chips
+   wrap raggedly (one chip alone on a line, then two). One row per side
+   effect removes the wrapping decision entirely — each item is free to wrap
+   its own text across 1-2 lines without ever competing with a sibling chip
+   for the same line, and the layout is identical at every width instead of
+   reflowing between "ragged" and "tidy" as the sidebar resizes.
+   Marker reuses --panel-oxblood the same decorative-only way sidebar.css's
+   .self-turn.is-active does (a rule/wash, never text) — panel-surface.css's
+   own contrast table measures oxblood at 3.39:1 against the paper, below
+   WCAG AA, so the side-effect name itself stays --panel-ink and only the
+   small leading tick is oxblood. */
+.card-info-side-effects {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.card-info-side-effects li {
+  position: relative;
+  font-size: var(--sidebar-fs-meta, 0.875rem);
+  color: var(--panel-ink, #1a1006);
+  line-height: 1.3;
+  padding-left: 0.6rem;
+}
+.card-info-side-effects li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: var(--panel-oxblood, #5c2119);
+}
+
+/* Mouse hit-target added inside every real card's face — see GameCard.tsx
+   for why it exists and why CardBack never renders one. Absolutely fills
+   CardFrame's box (cards.css: .card-frame is position:relative;
+   overflow:hidden), so hovering anywhere on the visible art reports that
+   card; it does not intercept clicks meaningfully since it carries no click
+   handler of its own and clicks still bubble to the card's actual button
+   ancestor (CardButton / the psyche slot button) exactly as before. */
+.card-hover-target {
+  position: absolute;
+  inset: 0;
+}

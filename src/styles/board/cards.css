@@ -1,0 +1,68 @@
+/* ── Cards ── */
+.card-button {
+  display: block;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  min-height: unset;
+  transition: transform 0.2s, box-shadow 0.2s, margin 0.2s, filter 0.2s;
+  border-radius: 0.85rem;
+}
+.card-button.dimmed-pending { opacity: 0.7; filter: grayscale(50%); pointer-events: none; }
+
+.card-frame {
+  flex: 0 0 12.5rem;
+  width: 12.5rem;
+  /* Matches --card-ratio (tokens.css, 1.5 = the art's 2:3 faces) instead
+     of a fixed min-height: this base rule only ever applies outside
+     .game-board (no live --card-w there), and the art is stretched to this
+     box exactly (background-size: 100% 100% below), so it must keep the
+     art's aspect ratio or the art distorts. In practice every current caller
+     (hand/psyche/trade slots, GhostLayer's measured-rect ghost) already
+     renders inside .game-board or copies its measured aspect ratio, so this
+     is a defensive fallback, not something exercised today. */
+  aspect-ratio: var(--card-ratio, 1.5);
+  position: relative;
+  border-radius: 0.85rem;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid rgba(148,163,184,.2);
+  box-shadow: 0 6px 12px rgba(0,0,0,.35);
+  /* Card name, effect text, side-effect list and per-disorder glyph are all
+     baked into the art now (cardArt.ts resolves --card-art per definitionId,
+     CardFrame.tsx sets it inline) — no CSS padding here, or the image would
+     sit inset from the frame's rounded corners with a gap of the (now
+     transparent) frame background showing around it. */
+  padding: 0;
+  background-color: #05070d; /* shows briefly while the webp decodes */
+  background-image: var(--card-art);
+  background-size: 100% 100%; /* the box is always ratio-locked to the art (see aspect-ratio above), so a plain stretch is exact — "cover" would crop instead if either was ever a pixel off */
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.game-board .card-frame {
+  flex: 0 0 var(--card-w);
+  width: var(--card-w);
+  height: var(--card-h);
+  min-height: var(--card-h);
+  border-radius: var(--card-radius);
+}
+
+/* ── Accessibility text ──
+   Everything the DOM used to paint on top of the card face (name, effect
+   text, side-effect chips, per-disorder glyph) is baked into the art now —
+   see cardArt.ts / CardFrame.tsx. GameCard.tsx still renders that same text,
+   wrapped in .visually-hidden, purely so a screen reader still gets the
+   card's full identity and rules; sighted players read it off the image, so
+   none of it needs on-card positioning or styling any more. */
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
