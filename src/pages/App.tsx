@@ -57,6 +57,7 @@ export function App() {
         <DecisionModal
           decision={store.pendingDecision}
           viewerPlayerId={store.pendingDecision.chooserPlayerId}
+          playerHand={game.players.find(p => p.id === store.pendingDecision?.chooserPlayerId)?.hand}
           onResolve={store.resolvePendingDecision}
         />
       )}
