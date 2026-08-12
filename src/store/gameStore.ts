@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { playDisorder as playDisorderCommand } from '../game/engine/disorderPlay'
 import { playDrug as playDrugCommand } from '../game/engine/drugTreatment'
 import {
+  getEpisodeDecisionRequirement,
+  getEpisodePlayContext,
   playEpisode as playEpisodeCommand,
   type EpisodeEffectOptions,
 } from '../game/engine/episode'
@@ -22,12 +24,22 @@ import type { GameCommand } from '../../server/game/commands'
 
 type TradeCardsCommand = Extract<GameCommand, { type: 'tradeCards' }>
 
+export interface LocalPendingDecision {
+  id: string
+  kind: 'anxiety' | 'tremors'
+  chooserPlayerId: string
+  command: Extract<GameCommand, { type: 'playEpisode' }>
+  choices: { id: string; label: string }[]
+  choiceMap: Record<string, string>
+}
+
 type StoreAction = (game: GameState) => GameState
 
 interface GameStore {
   gameState?: GameState
   error?: string
   gameLog: string[]
+  pendingDecision?: LocalPendingDecision
   createLocalGame: (playerNames: string[]) => void
   draw: () => void
   playDrug: (drugCardId: string, disorderCardId: string) => void
@@ -38,6 +50,7 @@ interface GameStore {
     targetDisorderCardId: string,
     options?: EpisodeEffectOptions,
   ) => void
+  resolvePendingDecision: (decisionId: string, choiceIds: string[]) => void
   playTherapy: (therapyCardId: string, disorderCardId: string) => void
   discard: (cardInstanceId: string) => void
   manualDiscard: (cardInstanceId: string) => void
@@ -67,6 +80,10 @@ export const useGameStore = create<GameStore>((set, get) => {
   const run = (action: StoreAction, command: GameCommand): boolean => {
     const game = get().gameState
     if (!game) return false
+    if (get().pendingDecision) {
+      set({ error: 'Resolve the pending Episode decision first.' })
+      return false
+    }
     try {
       const nextGame = action(game)
       const entry = describeCommand(game, command, nextGame)
@@ -96,12 +113,14 @@ export const useGameStore = create<GameStore>((set, get) => {
     gameState: undefined,
     error: undefined,
     gameLog: [],
+    pendingDecision: undefined,
     createLocalGame: (playerNames) => {
       try {
         set({
           gameState: createGame(playerNames),
           error: undefined,
           gameLog: [t('logLocalStarted')],
+          pendingDecision: undefined,
         })
       } catch (error) {
         set({ error: errorMessage(error) })
@@ -131,24 +150,101 @@ export const useGameStore = create<GameStore>((set, get) => {
           ),
         { type: 'playDisorder', disorderCardId, targetPlayerId },
       ),
-    playEpisode: (
-      episodeCardId,
-      targetPlayerId,
-      targetDisorderCardId,
-      options,
-    ) =>
+    playEpisode: (episodeCardId, targetPlayerId, targetDisorderCardId, options) => {
+      const game = get().gameState
+      if (!game) return
+      if (get().pendingDecision) {
+        set({ error: 'Resolve the pending Episode decision first.' })
+        return
+      }
+      const command: Extract<GameCommand, { type: 'playEpisode' }> = {
+        type: 'playEpisode',
+        episodeCardId,
+        targetPlayerId,
+        targetDisorderCardId,
+      }
+      try {
+        const requirement = getEpisodeDecisionRequirement(
+          getEpisodePlayContext(game, game.currentPlayerId, episodeCardId, targetPlayerId, targetDisorderCardId),
+        )
+        if (requirement && !options) {
+          const choiceMap = Object.fromEntries(
+            requirement.cardIds.map((cardId, index) => [
+              requirement.kind === 'anxiety' ? `choice-${index + 1}` : cardId,
+              cardId,
+            ]),
+          )
+          const target = game.players.find((player) => player.id === targetPlayerId)!
+          set({
+            error: undefined,
+            pendingDecision: {
+              id: `local-decision-${game.turnNumber}-${episodeCardId}`,
+              kind: requirement.kind,
+              chooserPlayerId: requirement.chooserPlayerId,
+              command,
+              choiceMap,
+              choices: Object.entries(choiceMap).map(([id, cardId], index) => ({
+                id,
+                label: requirement.kind === 'anxiety'
+                  ? `Lá bài ${index + 1}`
+                  : target.hand.find((card) => card.instanceId === cardId)?.displayName ?? id,
+              })),
+            },
+          })
+          return
+        }
+      } catch (error) {
+        set({ error: errorMessage(error) })
+        return
+      }
       run(
-        (game) =>
-          playEpisodeCommand(
-            game,
-            game.currentPlayerId,
-            episodeCardId,
-            targetPlayerId,
-            targetDisorderCardId,
-            options,
-          ),
-        { type: 'playEpisode', episodeCardId, targetPlayerId, targetDisorderCardId },
-      ),
+        (currentGame) => playEpisodeCommand(
+          currentGame,
+          currentGame.currentPlayerId,
+          episodeCardId,
+          targetPlayerId,
+          targetDisorderCardId,
+          options,
+        ),
+        command,
+      )
+    },
+    resolvePendingDecision: (decisionId, choiceIds) => {
+      const pending = get().pendingDecision
+      const game = get().gameState
+      if (!pending || !game || pending.id !== decisionId) {
+        set({ error: 'There is no matching pending Episode decision.' })
+        return
+      }
+      const expectedCount = pending.kind === 'anxiety' ? 1 : 3
+      const cardIds = choiceIds.map((choiceId) => pending.choiceMap[choiceId])
+      if (choiceIds.length !== expectedCount || new Set(choiceIds).size !== expectedCount || cardIds.some((cardId) => !cardId)) {
+        set({ error: `Choose exactly ${expectedCount} distinct cards.` })
+        return
+      }
+      try {
+        const options: EpisodeEffectOptions = pending.kind === 'anxiety'
+          ? { chosenCardId: cardIds[0] }
+          : { tremorsDiscardCardIds: cardIds }
+        const nextGame = playEpisodeCommand(
+          game,
+          game.currentPlayerId,
+          pending.command.episodeCardId,
+          pending.command.targetPlayerId,
+          pending.command.targetDisorderCardId,
+          options,
+        )
+        const entry = describeCommand(game, pending.command, nextGame)
+        set({
+          gameState: nextGame,
+          pendingDecision: undefined,
+          error: undefined,
+          gameLog: [...get().gameLog, ...(entry ? [entry] : [])].slice(-30),
+        })
+      } catch (error) {
+        set({ error: errorMessage(error) })
+      }
+    },
     playTherapy: (therapyCardId, disorderCardId) =>
       run(
         (game) =>
@@ -182,7 +278,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     tradeCards: (command) =>
       run((game) => tradeCardsCommand(game, command), command),
     resetGame: () =>
-      set({ gameState: undefined, error: undefined, gameLog: [] }),
+      set({ gameState: undefined, error: undefined, gameLog: [], pendingDecision: undefined }),
     clearError: () => set({ error: undefined }),
   }
 })

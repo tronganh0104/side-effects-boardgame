@@ -2,10 +2,21 @@ import { episodeHandlers, type EpisodeEffectOptions } from './episodeHandlers'
 import { assertGameIsPlaying } from './gameStatus'
 import { cannotPlayCards } from './temporaryEffects'
 import type { GameState, PlayerState } from './types'
+import type { DisorderId } from '../cards/types'
 
 export type { EpisodeEffectOptions } from './episodeHandlers'
 
 const MAX_CARDS_PLAYED_PER_TURN = 2
+
+/** Effects that can remove or transfer cards from the target's hand. */
+export function episodeMutatesTargetHand(disorderId: DisorderId): boolean {
+  return (
+    disorderId === 'suicidal-thoughts' ||
+    disorderId === 'tremors' ||
+    disorderId === 'gambling-addiction' ||
+    disorderId === 'anxiety'
+  )
+}
 
 export interface EpisodePlayContext {
   attackerIndex: number

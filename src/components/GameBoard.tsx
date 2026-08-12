@@ -393,6 +393,10 @@ export function GameBoard(props: GameBoardProps) {
   }, [game.turnNumber, game.turn.cardsPlayedThisTurn, game.turn.phase, viewerHand])
 
   useEffect(() => {
+    if (tradeSession?.yourCardId === selectedCardId) setSelectedCardId(undefined)
+  }, [selectedCardId, tradeSession?.yourCardId])
+
+  useEffect(() => {
     if (props.error) {
       setIsLocked(false)
     }

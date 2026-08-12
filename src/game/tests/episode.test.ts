@@ -5,7 +5,7 @@ import type {
   DrugDefinition,
   EpisodeDefinition,
 } from '../cards/types'
-import { playEpisode } from '../engine/episode'
+import { episodeMutatesTargetHand, playEpisode } from '../engine/episode'
 import type { RandomSource } from '../engine/random'
 import { createGame } from '../engine/setup'
 import {
@@ -147,6 +147,16 @@ const allCards = (game: ReturnType<typeof drawnGame>) => [
 ]
 
 describe('Episode', () => {
+  it('classifies only hand-mutating Episodes for trade teardown', () => {
+    expect(episodeMutatesTargetHand('madness')).toBe(false)
+    expect(episodeMutatesTargetHand('suicidal-thoughts')).toBe(true)
+    expect(episodeMutatesTargetHand('depression')).toBe(false)
+    expect(episodeMutatesTargetHand('tremors')).toBe(true)
+    expect(episodeMutatesTargetHand('gambling-addiction')).toBe(true)
+    expect(episodeMutatesTargetHand('anxiety')).toBe(true)
+    expect(episodeMutatesTargetHand('impotence')).toBe(false)
+    expect(episodeMutatesTargetHand('anorexia')).toBe(false)
+  })
   it('rejects treated targets and invalid general commands', () => {
     const scenario = episodeScenario('madness')
     const treated = addDrugToTargetSlot(scenario.game, scenario.targetId, 0)

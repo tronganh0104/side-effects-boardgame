@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { FinishedScreen } from '../components/FinishedScreen'
+import { DecisionModal } from '../components/DecisionModal'
 import { GameBoard } from '../components/GameBoard'
 import { HomeScreen } from '../components/HomeScreen'
 import { OnlineLobby } from '../components/OnlineLobby'
@@ -51,7 +52,15 @@ export function App() {
     )
   }
   return (
-    <GameBoard
+    <>
+      {store.pendingDecision && (
+        <DecisionModal
+          decision={store.pendingDecision}
+          viewerPlayerId={store.pendingDecision.chooserPlayerId}
+          onResolve={store.resolvePendingDecision}
+        />
+      )}
+      <GameBoard
       game={game}
       error={store.error ?? tradeError}
       gameLog={store.gameLog}
@@ -82,6 +91,7 @@ export function App() {
       tradeIneligiblePlayers={
         tradeSession ? { [tradeSession.withPlayerId]: 'busy' } : undefined
       }
-    />
+      />
+    </>
   )
 }

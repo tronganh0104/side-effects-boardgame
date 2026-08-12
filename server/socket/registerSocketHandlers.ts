@@ -2,6 +2,10 @@ import type { Server, Socket } from 'socket.io'
 import { createChatGateway } from '../chat/chatGateway'
 import { createPlayerView } from '../game/playerView'
 import type { GameCommand } from '../game/commands'
+import {
+  episodeMutatesTargetHand,
+  getEpisodePlayContext,
+} from '../../src/game/engine/episode'
 import { RoomService } from '../rooms/roomService'
 import type { Room } from '../rooms/types'
 import { createTradeGateway } from '../trade/tradeGateway'
@@ -269,13 +273,28 @@ export function registerSocketHandlers(io: Server, rooms: RoomService): void {
           throw new Error(
             'Lá bài này đang được đặt trong một phiên trao đổi, hãy rút ra trước khi sử dụng.',
           )
-        const beforePlayerId = rooms.getRoom(session.roomId)?.gameState?.currentPlayerId
+        const gameBefore = rooms.getRoom(session.roomId)?.gameState
+        if (command.type === 'playEpisode' && gameBefore) {
+          const context = getEpisodePlayContext(
+            gameBefore,
+            session.playerId,
+            command.episodeCardId,
+            command.targetPlayerId,
+            command.targetDisorderCardId,
+          )
+          if (episodeMutatesTargetHand(context.targetDisorderId))
+            trade.closeRoomSessions(session.roomId, 'cancelled')
+        }
+        const beforePlayerId = gameBefore?.currentPlayerId
         const nextGame = rooms.executeCommand(session.roomId, session.playerId, command)
         const room = rooms.getRoom(session.roomId)!
         // Spec section 6.3: a trade session becomes invalid once the current
         // turn ends or the game finishes, since it was negotiated against a
         // hand state that may no longer hold.
-        if (nextGame.status === 'finished' || nextGame.currentPlayerId !== beforePlayerId)
+        if (
+          nextGame.status === 'finished' ||
+          nextGame.currentPlayerId !== beforePlayerId
+        )
           trade.closeRoomSessions(session.roomId, 'cancelled')
         broadcastRoom(room)
         broadcastGame(room)

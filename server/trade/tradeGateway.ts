@@ -153,6 +153,7 @@ export function createTradeGateway(deps: {
       })
 
       on('trade:accept', (session) => {
+        assertRoomCanTrade(requireRoom(session.roomId))
         const existing = requireExisting(session.playerId, 'Không có lời mời trao đổi nào để chấp nhận.')
         emitState(requireRoom(session.roomId), store.accept(existing.id, session.playerId))
       })
@@ -163,6 +164,7 @@ export function createTradeGateway(deps: {
       })
 
       on('trade:place', (session, payload) => {
+        assertRoomCanTrade(requireRoom(session.roomId))
         // Only `cardInstanceId` is ever read out of the payload.
         const { cardInstanceId } = parseTradePlacePayload(payload)
         const existing = requireExisting(session.playerId, 'Bạn không ở trong phiên trao đổi nào.')
@@ -179,6 +181,7 @@ export function createTradeGateway(deps: {
       })
 
       on('trade:confirm', (session) => {
+        assertRoomCanTrade(requireRoom(session.roomId))
         const existing = requireExisting(session.playerId, 'Bạn không ở trong phiên trao đổi nào.')
         const result = store.confirm(existing.id, session.playerId)
         const room = requireRoom(session.roomId)
