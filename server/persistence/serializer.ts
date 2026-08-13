@@ -16,7 +16,7 @@ export function serializeRoom(room: Room): PersistedRoomSnapshot {
 }
 
 export function deserializeRoom(snapshot: PersistedRoomSnapshot): Room {
-  if (snapshot.schemaVersion !== ROOM_SNAPSHOT_SCHEMA_VERSION)
+  if (snapshot.schemaVersion !== 2 && snapshot.schemaVersion !== ROOM_SNAPSHOT_SCHEMA_VERSION)
     throw new Error(`Unsupported room snapshot schema: ${snapshot.schemaVersion}`)
   const room = snapshot.room
   if (
@@ -26,8 +26,20 @@ export function deserializeRoom(snapshot: PersistedRoomSnapshot): Room {
     !room.sessionTokenHashes
   )
     throw new Error('Invalid room snapshot.')
+  const pendingDecision = room.pendingDecision
+  const migratedPendingDecision =
+    snapshot.schemaVersion === 2 && pendingDecision?.kind === 'tremors'
+      ? { ...pendingDecision, expiresAt: 0 }
+      : pendingDecision
+  if (
+    snapshot.schemaVersion === ROOM_SNAPSHOT_SCHEMA_VERSION &&
+    migratedPendingDecision?.kind === 'tremors' &&
+    !Number.isFinite(migratedPendingDecision.expiresAt)
+  )
+    throw new Error('Invalid Tremors deadline in room snapshot.')
   return {
     ...room,
+    pendingDecision: migratedPendingDecision,
     players: room.players.map((player) => ({
       ...player,
       connected: false,

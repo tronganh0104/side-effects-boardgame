@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PendingDecisionView, PublicCardView } from '../../server/game/playerView'
 import { t } from '../i18n'
 import { GameCard } from './cards/GameCard'
@@ -20,12 +20,24 @@ const cardTypeLabel: Record<string, string> = {
 export function DecisionModal({ decision, viewerPlayerId, playerHand, onResolve }: DecisionModalProps) {
   const isChooser = decision.chooserPlayerId === viewerPlayerId
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    setSelectedIds([])
+    setNow(Date.now())
+  }, [decision.id])
+
+  useEffect(() => {
+    if (decision.kind !== 'tremors' || decision.expiresAt === undefined) return
+    const interval = setInterval(() => setNow(Date.now()), 100)
+    return () => clearInterval(interval)
+  }, [decision.kind, decision.expiresAt])
 
   if (!isChooser) {
     return (
       <div className="decision-overlay">
         <div className="decision-modal">
-          <span className="decision-tag">⏳ Đang chờ</span>
+          <span className="decision-tag">{t('waitingTag')}</span>
           <h2>{t('waitingForDecision')}</h2>
           <p>{t('waitingForOpponentToResolve', { kind: decision.kind })}</p>
         </div>
@@ -36,6 +48,11 @@ export function DecisionModal({ decision, viewerPlayerId, playerHand, onResolve 
   const isAnxiety = decision.kind === 'anxiety'
   const isTremors = decision.kind === 'tremors'
   const choices = decision.choices ?? []
+  const remainingMs =
+    isTremors && decision.expiresAt !== undefined
+      ? Math.max(0, decision.expiresAt - now)
+      : undefined
+  const isExpired = remainingMs === 0
 
   const handleToggle = (id: string) => {
     if (isAnxiety) {
@@ -62,19 +79,22 @@ export function DecisionModal({ decision, viewerPlayerId, playerHand, onResolve 
     (isAnxiety && selectedIds.length === 1) ||
     (isTremors && selectedIds.length === requiredCount)
 
-  const episodeLabel = isAnxiety ? '⚡ Cơn phát bệnh · Lo âu' : '⚡ Cơn phát bệnh · Run rẩy'
+  const episodeLabel = t(
+    isAnxiety ? 'episodeAnxietyLabel' : 'episodeTremorsLabel',
+  )
 
   let confirmText = t('confirm')
   if (isTremors) {
     const remaining = requiredCount - selectedIds.length
     if (selectedIds.length === 0) {
-      confirmText = `Chọn ${requiredCount} lá`
+      confirmText = t('tremorsChooseCards', { count: requiredCount })
     } else if (remaining > 0) {
-      confirmText = `Chọn thêm ${remaining} lá`
+      confirmText = t('tremorsChooseMore', { count: remaining })
     } else {
-      confirmText = `Bỏ ${requiredCount} lá đã chọn`
+      confirmText = t('tremorsDiscardSelected', { count: requiredCount })
     }
   }
+  if (isExpired) confirmText = t('tremorsResolving')
 
   return (
     <div className="decision-overlay">
@@ -84,8 +104,22 @@ export function DecisionModal({ decision, viewerPlayerId, playerHand, onResolve 
         <p>{t(isAnxiety ? 'anxietyPrompt' : 'tremorsPrompt')}</p>
 
         {isTremors && (
-          <div className="tremors-counter">
-            Đã chọn {selectedIds.length} / {requiredCount}
+          <div className="tremors-status" aria-live="polite">
+            <div className="tremors-counter">
+              {t('tremorsSelectedCount', {
+                selected: selectedIds.length,
+                required: requiredCount,
+              })}
+            </div>
+            {remainingMs !== undefined && (
+              <div className="tremors-countdown">
+                {isExpired
+                  ? t('tremorsResolving')
+                  : t('tremorsCountdown', {
+                      seconds: (remainingMs / 1000).toFixed(1),
+                    })}
+              </div>
+            )}
           </div>
         )}
 
@@ -97,7 +131,7 @@ export function DecisionModal({ decision, viewerPlayerId, playerHand, onResolve 
 
               const isSelected = selectedIds.includes(choice.id)
               const isMaxReached = selectedIds.length >= requiredCount
-              const isDisabled = !isSelected && isMaxReached
+              const isDisabled = isExpired || (!isSelected && isMaxReached)
               
               return (
                 <button
@@ -105,11 +139,13 @@ export function DecisionModal({ decision, viewerPlayerId, playerHand, onResolve 
                   className={`tremors-card-wrapper ${isSelected ? 'tremors-card-selected' : ''} ${isDisabled ? 'tremors-card-unselected' : ''}`}
                   onClick={() => handleToggle(choice.id)}
                   aria-pressed={isSelected}
-                  disabled={isDisabled && !isSelected}
+                  disabled={isDisabled}
                 >
                   <GameCard card={cardData} />
                   {isSelected && (
-                    <div className="tremors-card-badge">✓ Đã chọn</div>
+                    <div className="tremors-card-badge">
+                      ✓ {t('tremorsSelected')}
+                    </div>
                   )}
                 </button>
               )
@@ -142,15 +178,15 @@ export function DecisionModal({ decision, viewerPlayerId, playerHand, onResolve 
               type="button"
               className="secondary reset-btn"
               onClick={handleReset}
-              disabled={selectedIds.length === 0}
+              disabled={selectedIds.length === 0 || isExpired}
             >
-              Hủy chọn
+              {t('cancelSelection')}
             </button>
           )}
           <button
             type="button"
             className="primary confirm-btn"
-            disabled={!isValid}
+            disabled={!isValid || isExpired}
             onClick={() => onResolve(decision.id, selectedIds)}
           >
             {isValid ? '✓ ' : ''}{confirmText}

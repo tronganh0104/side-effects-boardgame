@@ -1,9 +1,9 @@
 import type { Room } from '../rooms/types'
 
-export const ROOM_SNAPSHOT_SCHEMA_VERSION = 2
+export const ROOM_SNAPSHOT_SCHEMA_VERSION = 3
 
 export interface PersistedRoomSnapshot {
-  schemaVersion: typeof ROOM_SNAPSHOT_SCHEMA_VERSION
+  schemaVersion: number
   room: Omit<Room, 'players'> & {
     players: Array<Omit<Room['players'][number], 'socketId'>>
   }

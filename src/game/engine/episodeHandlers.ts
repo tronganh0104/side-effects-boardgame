@@ -6,6 +6,8 @@ export interface EpisodeEffectOptions {
   rng?: RandomSource
   chosenCardId?: string
   tremorsDiscardCardIds?: string[]
+  /** Server-only canonical fallback when the three-second choice expires. */
+  tremorsTimedOut?: true
 }
 
 export interface EpisodeHandlerContext {
@@ -185,7 +187,7 @@ const anorexia: EpisodeHandler = ({ game, target }) => ({
 })
 
 const tremors: EpisodeHandler = ({ game, target, options }) => {
-  if (target.hand.length < 3) {
+  if (target.hand.length < 3 || options.tremorsTimedOut) {
     return suicidalThoughts({ game, target, attacker: target, options })
   }
 
@@ -206,7 +208,6 @@ const tremors: EpisodeHandler = ({ game, target, options }) => {
     )
   }
 
-  // TODO: UI/multiplayer layers will enforce the official three-second response timer.
   return {
     ...game,
     players: replacePlayers(

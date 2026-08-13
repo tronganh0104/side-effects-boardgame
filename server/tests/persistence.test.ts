@@ -132,6 +132,7 @@ describe('room persistence', () => {
                   card.instanceId,
                 ]),
               ),
+        ...(kind === 'tremors' ? { expiresAt: Date.now() + 60_000 } : {}),
       }
       // Resume triggers a persistence mutation without exposing socket IDs.
       service.resumeSession(
@@ -150,6 +151,7 @@ describe('room persistence', () => {
         id: `decision-${kind}`,
         kind,
       })
+      restoredService.dispose()
     }
   })
 

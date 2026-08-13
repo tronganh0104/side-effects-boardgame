@@ -30,14 +30,56 @@ export interface SessionCredential {
   sessionToken: string
 }
 
+export interface Clock {
+  now(): number
+}
+
+export interface TimeoutScheduler {
+  set(callback: () => void, delayMs: number): unknown
+  clear(handle: unknown): void
+}
+
+export interface RoomServiceDependencies {
+  clock?: Clock
+  scheduler?: TimeoutScheduler
+}
+
+const TREMORS_TIMEOUT_MS = 3_000
+const systemClock: Clock = { now: () => Date.now() }
+const systemScheduler: TimeoutScheduler = {
+  set: (callback, delayMs) => setTimeout(callback, delayMs),
+  clear: (handle) => clearTimeout(handle as NodeJS.Timeout),
+}
+
 export class RoomService {
   private readonly rooms = new Map<string, Room>()
   private readonly persistenceQueues = new Map<string, Promise<void>>()
+  private readonly decisionTimers = new Map<
+    string,
+    { decisionId: string; handle: unknown }
+  >()
+  private readonly mutationListeners = new Set<(room: Room) => void>()
+  private readonly clock: Clock
+  private readonly scheduler: TimeoutScheduler
 
   constructor(
     private readonly repository: RoomRepository = new InMemoryRoomRepository(),
     private readonly logError: (message: string) => void = console.error,
-  ) {}
+    dependencies: RoomServiceDependencies = {},
+  ) {
+    this.clock = dependencies.clock ?? systemClock
+    this.scheduler = dependencies.scheduler ?? systemScheduler
+  }
+
+  onMutation(listener: (room: Room) => void): () => void {
+    this.mutationListeners.add(listener)
+    return () => this.mutationListeners.delete(listener)
+  }
+
+  dispose(): void {
+    for (const roomId of this.decisionTimers.keys()) this.clearDecisionTimer(roomId)
+    this.mutationListeners.clear()
+  }
 
   createRoom(
     displayName: string,
@@ -99,6 +141,7 @@ export class RoomService {
     if (remainingPlayers.length === room.players.length)
       throw new Error('Player is not in this room.')
     if (remainingPlayers.length === 0) {
+      this.clearDecisionTimer(roomId)
       this.rooms.delete(roomId)
       this.deletePersistedRoom(roomId)
       return undefined
@@ -160,6 +203,7 @@ export class RoomService {
       )
       if (requirement) {
         room.pendingDecision = this.createPendingDecision(command, requirement)
+        this.schedulePendingDecision(room)
         this.persistRoom(room)
         return game
       }
@@ -170,7 +214,10 @@ export class RoomService {
       ...room.gameLog,
       describeCommand(game, command, nextGame),
     ].slice(-30)
-    if (nextGame.status === 'finished') room.status = 'finished'
+    if (nextGame.status === 'finished') {
+      room.status = 'finished'
+      this.clearDecisionTimer(room.id)
+    }
     this.persistRoom(room)
     return nextGame
   }
@@ -190,6 +237,10 @@ export class RoomService {
       throw new Error('Disconnected players cannot resolve decisions.')
     if (decision.id !== decisionId || decision.chooserPlayerId !== playerId)
       throw new Error('This player cannot resolve that decision.')
+    if (decision.kind === 'tremors' && this.clock.now() >= decision.expiresAt) {
+      this.resolveTremorsTimeout(room, decision.id)
+      throw new Error('The Tremors decision has expired and is being resolved.')
+    }
     const expectedCount = decision.kind === 'anxiety' ? 1 : 3
     if (
       selectedChoiceIds.length !== expectedCount ||
@@ -214,13 +265,17 @@ export class RoomService {
       before.currentPlayerId,
       command,
     )
+    this.clearDecisionTimer(room.id, decision.id)
     room.pendingDecision = undefined
     room.gameState = nextGame
     room.gameLog = [
       ...room.gameLog,
       describeCommand(before, decision.command, nextGame),
     ].slice(-30)
-    if (nextGame.status === 'finished') room.status = 'finished'
+    if (nextGame.status === 'finished') {
+      room.status = 'finished'
+      this.clearDecisionTimer(room.id)
+    }
     this.persistRoom(room)
     return nextGame
   }
@@ -265,6 +320,11 @@ export class RoomService {
         if (this.rooms.has(room.id))
           throw new Error(`Duplicate persisted room code: ${room.id}`)
         this.rooms.set(room.id, room)
+        if (room.pendingDecision?.kind === 'tremors') {
+          if (this.clock.now() >= room.pendingDecision.expiresAt)
+            this.resolveTremorsTimeout(room, room.pendingDecision.id)
+          else this.schedulePendingDecision(room)
+        }
       } catch {
         this.logError('Skipped an unsupported persisted room snapshot.')
       }
@@ -344,13 +404,89 @@ export class RoomService {
         cardId,
       ]),
     )
-    return {
+    const base = {
       id: `decision-${randomUUID()}`,
-      kind: requirement.kind,
       chooserPlayerId: requirement.chooserPlayerId,
       command,
       choiceMap,
     }
+    return requirement.kind === 'tremors'
+      ? {
+          ...base,
+          kind: 'tremors',
+          expiresAt: this.clock.now() + TREMORS_TIMEOUT_MS,
+        }
+      : { ...base, kind: 'anxiety' }
+  }
+
+  private schedulePendingDecision(room: Room): void {
+    const decision = room.pendingDecision
+    if (!decision || decision.kind !== 'tremors') return
+    this.clearDecisionTimer(room.id)
+    const decisionId = decision.id
+    const delayMs = Math.max(0, decision.expiresAt - this.clock.now())
+    const handle = this.scheduler.set(() => {
+      const currentRoom = this.rooms.get(room.id)
+      const currentDecision = currentRoom?.pendingDecision
+      if (
+        !currentRoom ||
+        currentDecision?.kind !== 'tremors' ||
+        currentDecision.id !== decisionId
+      )
+        return
+      if (this.clock.now() < currentDecision.expiresAt) {
+        this.schedulePendingDecision(currentRoom)
+        return
+      }
+      try {
+        this.resolveTremorsTimeout(currentRoom, decisionId)
+      } catch {
+        this.logError('Tremors timeout resolution failed; the decision remains pending.')
+      }
+    }, delayMs)
+    this.decisionTimers.set(room.id, { decisionId, handle })
+  }
+
+  private clearDecisionTimer(roomId: string, decisionId?: string): void {
+    const timer = this.decisionTimers.get(roomId)
+    if (!timer || (decisionId && timer.decisionId !== decisionId)) return
+    this.scheduler.clear(timer.handle)
+    this.decisionTimers.delete(roomId)
+  }
+
+  private resolveTremorsTimeout(room: Room, decisionId: string): boolean {
+    const decision = room.pendingDecision
+    if (
+      !room.gameState ||
+      decision?.kind !== 'tremors' ||
+      decision.id !== decisionId
+    )
+      return false
+    const before = room.gameState
+    const command: GameCommand = {
+      ...decision.command,
+      options: { tremorsTimedOut: true },
+    }
+    const nextGame = this.applyCommand(
+      before,
+      before.currentPlayerId,
+      command,
+    )
+    this.clearDecisionTimer(room.id, decisionId)
+    room.pendingDecision = undefined
+    room.gameState = nextGame
+    const chooserName =
+      room.players.find((player) => player.id === decision.chooserPlayerId)
+        ?.displayName ?? 'Một người chơi'
+    room.gameLog = [
+      ...room.gameLog,
+      describeCommand(before, decision.command, nextGame),
+      `${chooserName} đã không chọn kịp 3 lá do Run rẩy.`,
+    ].slice(-30)
+    if (nextGame.status === 'finished') room.status = 'finished'
+    this.persistRoom(room)
+    for (const listener of this.mutationListeners) listener(room)
+    return true
   }
 
   private requireRoom(roomId: string): Room {
