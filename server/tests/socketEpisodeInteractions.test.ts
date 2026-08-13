@@ -5,7 +5,7 @@ import { hasCardConservation } from '../../src/game/engine/invariants'
 import type { DisorderId } from '../../src/game/cards/types'
 
 type Session = { roomId: string; playerId: string; sessionToken: string }
-type GameView = { players: Array<{ id: string; hand?: Array<{ instanceId: string }>; handCount: number }>; pendingDecision?: { id: string; chooserPlayerId: string; choices?: Array<{ id: string; label: string }> } }
+type GameView = { players: Array<{ id: string; hand?: Array<{ instanceId: string }>; handCount: number }>; pendingDecision?: { id: string; chooserPlayerId: string; expiresAt?: number; choices?: Array<{ id: string; label: string }> } }
 
 function once<T>(socket: Socket, event: string) {
   return new Promise<T>((resolve) => socket.once(event, resolve))
@@ -62,6 +62,7 @@ describe('socket Episode interactions', () => {
     a.emit('game:command', { type: 'playEpisode', episodeCardId: prepared.episode.instanceId, targetPlayerId: prepared.target.id, targetDisorderCardId: prepared.disorder.instanceId })
     const [aView, bView] = await Promise.all([aViewWait, bViewWait]); const pending = bView.pendingDecision!
     expect(pending.chooserPlayerId).toBe(prepared.target.id); expect(pending.choices).toHaveLength(prepared.target.hand.length)
+    expect(pending.expiresAt).toBeGreaterThan(Date.now())
     expect(aView.pendingDecision?.choices).toBeUndefined(); expect(JSON.stringify(aView)).not.toContain(prepared.target.hand[0].instanceId)
     const wrong = once<string>(a, 'game:error'); a.emit('game:decision', { decisionId: pending.id, choiceIds: pending.choices!.slice(0, 3).map((choice) => choice.id) }); await expect(wrong).resolves.toContain('cannot resolve')
     const count = once<string>(b, 'game:error'); b.emit('game:decision', { decisionId: pending.id, choiceIds: pending.choices!.slice(0, 2).map((choice) => choice.id) }); await expect(count).resolves.toContain('exactly 3')
@@ -89,10 +90,28 @@ describe('socket Episode interactions', () => {
     const address = server.httpServer.address() as { port: number }; const replacement = connectClient(`http://127.0.0.1:${address.port}`, { transports: ['websocket'] }); clients.push(replacement); await once(replacement, 'connect')
     const restored = once<Session>(replacement, 'session:restored'); const restoredGame = once<GameView>(replacement, 'game:state'); replacement.emit('session:resume', bSession); await restored; const replacementView = await restoredGame
     expect(replacementView.pendingDecision?.id).toBe(pending.id)
+    expect(replacementView.pendingDecision?.expiresAt).toBe(pending.expiresAt)
     const stale = once<string>(b, 'game:error'); b.emit('game:decision', { decisionId: pending.id, choiceIds: pending.choices!.slice(0, 3).map((c) => c.id) }); await expect(stale).resolves.toContain('no longer active')
     const resolved = once<GameView>(replacement, 'game:state'); replacement.emit('game:decision', { decisionId: pending.id, choiceIds: pending.choices!.slice(0, 3).map((c) => c.id) }); await resolved
     const game = server.rooms.getRoom(aSession.roomId)!.gameState!; expect(server.rooms.getRoom(aSession.roomId)!.pendingDecision).toBeUndefined(); expect(game.players.find((p) => p.id === prepared.target.id)!.hand).toHaveLength(prepared.target.hand.length - 3); expect(game.turn.cardsPlayedThisTurn).toBe(1); expect(hasCardConservation(game)).toBe(true)
   })
+
+  it('broadcasts the authoritative timeout without leaking discarded identities', async () => {
+    const { server, a, b, aSession } = await room(); const prepared = arrange(server, aSession.roomId, 'tremors')
+    const pendingState = once<GameView>(b, 'game:state')
+    a.emit('game:command', { type: 'playEpisode', episodeCardId: prepared.episode.instanceId, targetPlayerId: prepared.target.id, targetDisorderCardId: prepared.disorder.instanceId })
+    const pending = (await pendingState).pendingDecision!
+    expect(pending.expiresAt).toBeDefined()
+
+    const attackerResolved = once<GameView>(a, 'game:state')
+    const chooserResolved = once<GameView>(b, 'game:state')
+    const [attackerView, chooserView] = await Promise.all([attackerResolved, chooserResolved])
+    expect(attackerView.pendingDecision).toBeUndefined()
+    expect(chooserView.pendingDecision).toBeUndefined()
+    expect(attackerView.players.find((player) => player.id === prepared.target.id)?.handCount).toBe(0)
+    expect(JSON.stringify(attackerView)).not.toContain(prepared.target.hand[0].instanceId)
+    expect(hasCardConservation(server.rooms.getRoom(aSession.roomId)!.gameState!, 89)).toBe(true)
+  }, 6_000)
 
   it.each(['suicidal-thoughts', 'tremors', 'gambling-addiction', 'anxiety'] as DisorderId[])('closes an active trade before %s can mutate the target hand', async (disorderId) => {
     const { server, a, b, aSession } = await room(); const prepared = arrange(server, aSession.roomId, disorderId)

@@ -27,6 +27,7 @@ export function createGameServer(config: ServerConfig) {
     : new InMemoryRoomRepository()
   const rooms = new RoomService(repository)
   registerSocketHandlers(io, rooms)
+  httpServer.on('close', () => rooms.dispose())
   return {
     httpServer,
     io,

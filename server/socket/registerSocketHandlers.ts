@@ -165,6 +165,10 @@ export function registerSocketHandlers(io: Server, rooms: RoomService): void {
     }
     io.to(room.id).emit('game:log', room.gameLog)
   }
+  rooms.onMutation((room) => {
+    broadcastRoom(room)
+    broadcastGame(room)
+  })
   const fail = (socket: Socket, error: unknown) =>
     socket.emit(
       'game:error',

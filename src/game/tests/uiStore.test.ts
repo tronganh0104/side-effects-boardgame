@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { CardInstance, DisorderDefinition } from '../cards/types'
 import { hasCardConservation } from '../engine/invariants'
 import { FinishedScreen } from '../../components/FinishedScreen'
+import { DecisionModal } from '../../components/DecisionModal'
 import { useGameStore } from '../../store/gameStore'
 
 function resetStore() {
@@ -211,5 +212,25 @@ describe('local UI adapter', () => {
 
     expect(html).toContain('Ada đã chiến thắng!')
     expect(html).toContain('Ván mới')
+  })
+
+  it('renders an expired Tremors countdown as a disabled resolving state', () => {
+    const html = renderToStaticMarkup(
+      createElement(DecisionModal, {
+        decision: {
+          id: 'decision-expired',
+          kind: 'tremors',
+          chooserPlayerId: 'ben',
+          expiresAt: 0,
+          choices: [],
+        },
+        viewerPlayerId: 'ben',
+        playerHand: [],
+        onResolve: () => undefined,
+      }),
+    )
+
+    expect(html).toContain('Đang xử lý...')
+    expect(html).toContain('disabled=""')
   })
 })

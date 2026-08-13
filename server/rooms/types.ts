@@ -20,10 +20,13 @@ export interface Room {
   sessionTokenHashes: Record<string, string>
 }
 
-export interface PendingDecision {
+interface PendingDecisionBase {
   id: string
-  kind: 'anxiety' | 'tremors'
   chooserPlayerId: string
   command: Extract<GameCommand, { type: 'playEpisode' }>
   choiceMap: Record<string, string>
 }
+
+export type PendingDecision =
+  | (PendingDecisionBase & { kind: 'anxiety'; expiresAt?: never })
+  | (PendingDecisionBase & { kind: 'tremors'; expiresAt: number })

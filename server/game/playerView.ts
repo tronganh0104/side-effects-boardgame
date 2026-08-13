@@ -45,6 +45,7 @@ export interface PendingDecisionView {
   id: string
   kind: 'anxiety' | 'tremors'
   chooserPlayerId: string
+  expiresAt?: number
   choices?: { id: string; label: string }[]
 }
 
@@ -74,6 +75,9 @@ export function createPlayerView(
         id: pendingDecision.id,
         kind: pendingDecision.kind,
         chooserPlayerId: pendingDecision.chooserPlayerId,
+        ...(pendingDecision.kind === 'tremors'
+          ? { expiresAt: pendingDecision.expiresAt }
+          : {}),
         ...(pendingDecision.chooserPlayerId === viewerPlayerId
           ? {
               choices: Object.keys(pendingDecision.choiceMap).map(
