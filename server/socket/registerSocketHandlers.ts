@@ -146,10 +146,11 @@ export function registerSocketHandlers(io: Server, rooms: RoomService): void {
     id: room.id,
     hostPlayerId: room.hostPlayerId,
     status: room.status,
-    players: room.players.map(({ id, displayName, connected }) => ({
+    players: room.players.map(({ id, displayName, connected, graceExpiresAt }) => ({
       id,
       displayName,
       connected,
+      ...(graceExpiresAt !== undefined ? { graceExpiresAt } : {}),
     })),
   })
   const broadcastRoom = (room: Room) =>
@@ -250,15 +251,18 @@ export function registerSocketHandlers(io: Server, rooms: RoomService): void {
     socket.on('room:leave', () => {
       try {
         const session = activeSession(socket)
+        trade.closeRoomSessions(session.roomId, 'cancelled')
         const room = rooms.leaveRoom(session.roomId, session.playerId)
         sessions.delete(socket.id)
         socket.leave(session.roomId)
         // A player leaving invalidates any trade session in this room (spec
         // section 6.3): the two seats a session assumes may no longer both
         // be occupied.
-        trade.closeRoomSessions(session.roomId, 'cancelled')
         socket.emit('room:left')
-        if (room) broadcastRoom(room)
+        if (room) {
+          broadcastRoom(room)
+          broadcastGame(room)
+        }
       } catch (error) {
         fail(socket, error)
       }

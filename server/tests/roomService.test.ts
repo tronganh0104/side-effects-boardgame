@@ -1,6 +1,34 @@
 import { describe, expect, it } from 'vitest'
+import { hasCardConservation } from '../../src/game/engine/invariants'
 import { createPlayerView } from '../game/playerView'
-import { RoomService } from '../rooms/roomService'
+import { RoomService, type Clock, type TimeoutScheduler } from '../rooms/roomService'
+
+class FakeTime implements Clock, TimeoutScheduler {
+  private readonly timers = new Map<number, { callback: () => void; dueAt: number }>()
+  private readonly callbacks = new Map<number, () => void>()
+  private nextId = 1
+
+  constructor(public value = 1_000) {}
+  now(): number { return this.value }
+  set(callback: () => void, delayMs: number): number {
+    const id = this.nextId++
+    this.timers.set(id, { callback, dueAt: this.value + delayMs })
+    this.callbacks.set(id, callback)
+    return id
+  }
+  clear(handle: unknown): void { this.timers.delete(handle as number) }
+  get lastScheduledHandle(): number { return this.nextId - 1 }
+  runStale(handle: number): void { this.callbacks.get(handle)?.() }
+  advanceTo(value: number): void {
+    this.value = value
+    while (true) {
+      const due = [...this.timers.entries()].find(([, timer]) => timer.dueAt <= this.value)
+      if (!due) return
+      this.timers.delete(due[0])
+      due[1].callback()
+    }
+  }
+}
 
 function startedRoom() {
   const service = new RoomService()
@@ -17,6 +45,105 @@ function startedRoom() {
 }
 
 describe('authoritative rooms', () => {
+  it('creates a 30-second active two-player grace and forfeits off-turn abandonment', () => {
+    const time = new FakeTime(10_000)
+    const service = new RoomService(undefined, () => undefined, { clock: time, scheduler: time })
+    const { room, player: host } = service.createRoom('Ada')
+    const { player: ben } = service.joinRoom(room.id, 'Ben')
+    service.startRoom(room.id, host.id)
+    const currentGame = room.gameState!
+    const offTurnId = currentGame.players.find((player) => player.id !== currentGame.currentPlayerId)!.id
+
+    service.markDisconnected(room.id, offTurnId, undefined)
+    expect(room.players.find((player) => player.id === offTurnId)).toMatchObject({
+      connected: false,
+      graceExpiresAt: 40_000,
+    })
+    expect(room.gameState).toBe(currentGame)
+
+    time.advanceTo(39_999)
+    expect(room.status).toBe('playing')
+    time.advanceTo(40_000)
+    expect(room.status).toBe('finished')
+    expect(room.gameState?.winnerPlayerId).toBe(currentGame.players.find((player) => player.id !== offTurnId)?.id)
+    expect(room.gameState?.players.find((player) => player.id === ben.id)?.hand).toBeDefined()
+  })
+
+  it('does not revive an expired deadline and gives a fresh deadline after reconnect', () => {
+    const time = new FakeTime(1_000)
+    const service = new RoomService(undefined, () => undefined, { clock: time, scheduler: time })
+    const { room, player: host } = service.createRoom('Ada')
+    const { player: ben, session: benSession } = service.joinRoom(room.id, 'Ben')
+    service.startRoom(room.id, host.id)
+    const exactState = room.gameState
+
+    service.markDisconnected(room.id, ben.id)
+    time.advanceTo(10_000)
+    service.resumeSession(room.id, ben.id, benSession.sessionToken, 'replacement')
+    expect(room.players.find((player) => player.id === ben.id)).toMatchObject({ connected: true })
+    expect(room.players.find((player) => player.id === ben.id)?.graceExpiresAt).toBeUndefined()
+    expect(room.gameState).toBe(exactState)
+
+    service.markDisconnected(room.id, ben.id, 'replacement')
+    expect(room.players.find((player) => player.id === ben.id)?.graceExpiresAt).toBe(40_000)
+    time.advanceTo(40_000)
+    expect(room.status).toBe('finished')
+  })
+
+  it('resolves abandonment before an exact-deadline resume can reactivate the seat', () => {
+    const time = new FakeTime(1_000)
+    const service = new RoomService(undefined, () => undefined, { clock: time, scheduler: time })
+    const { room, player: host } = service.createRoom('Ada')
+    const { player: ben, session: benSession } = service.joinRoom(room.id, 'Ben')
+    service.startRoom(room.id, host.id)
+    service.markDisconnected(room.id, ben.id)
+
+    time.value = 31_000
+    expect(() => service.resumeSession(room.id, ben.id, benSession.sessionToken, 'late-socket'))
+      .toThrow('Unable to restore session')
+    expect(room.status).toBe('finished')
+    expect(room.gameState?.winnerPlayerId).toBe(host.id)
+    expect(service.isActiveSocket(room.id, ben.id, 'late-socket')).toBe(false)
+    expect(hasCardConservation(room.gameState!, 89)).toBe(true)
+  })
+
+  it('makes an invalidated grace callback harmless after reconnect and a second disconnect', () => {
+    const time = new FakeTime(1_000)
+    const service = new RoomService(undefined, () => undefined, { clock: time, scheduler: time })
+    const { room, player: host } = service.createRoom('Ada')
+    const { player: ben, session: benSession } = service.joinRoom(room.id, 'Ben')
+    service.startRoom(room.id, host.id)
+
+    service.markDisconnected(room.id, ben.id)
+    const oldTimer = time.lastScheduledHandle
+    time.value = 10_000
+    service.resumeSession(room.id, ben.id, benSession.sessionToken, 'replacement')
+    service.markDisconnected(room.id, ben.id, 'replacement')
+
+    expect(room.players.find((player) => player.id === ben.id)?.graceExpiresAt).toBe(40_000)
+    time.value = 31_000
+    time.runStale(oldTimer)
+    expect(room.status).toBe('playing')
+    expect(room.players.find((player) => player.id === ben.id)?.graceExpiresAt).toBe(40_000)
+    expect(hasCardConservation(room.gameState!, 89)).toBe(true)
+
+    time.advanceTo(40_000)
+    expect(room.status).toBe('finished')
+    expect(room.gameState?.winnerPlayerId).toBe(host.id)
+    expect(hasCardConservation(room.gameState!, 89)).toBe(true)
+  })
+
+  it('supports immediate authenticated active two-player leave', () => {
+    const service = new RoomService()
+    const { room, player: host } = service.createRoom('Ada')
+    const { player: ben } = service.joinRoom(room.id, 'Ben')
+    service.startRoom(room.id, host.id)
+
+    service.leaveRoom(room.id, ben.id)
+    expect(room.status).toBe('finished')
+    expect(room.gameState?.winnerPlayerId).toBe(host.id)
+    expect(room.players.find((player) => player.id === ben.id)?.graceExpiresAt).toBeUndefined()
+  })
   it('creates a room and joins distinct players', () => {
     const service = new RoomService()
     const { room, player, session: hostSession } = service.createRoom('Ada')

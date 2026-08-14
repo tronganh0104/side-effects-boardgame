@@ -8,6 +8,7 @@ import { SetupScreen } from '../components/SetupScreen'
 import { useGameStore } from '../store/gameStore'
 import { useLocalTradeDriver } from '../store/localTradeDriver'
 import { useTradeStore } from '../store/tradeStore'
+import { exitFinishedLocalGame } from '../multiplayer/recoveryCleanup'
 import '../styles/index.css'
 
 export function App() {
@@ -43,11 +44,13 @@ export function App() {
     return (
       <FinishedScreen
         winnerName={winner?.name ?? 'A player'}
-        onNewGame={() => {
-          store.resetGame()
-          useLocalTradeDriver.getState().reset()
-          setMode('home')
-        }}
+        onNewGame={() =>
+          exitFinishedLocalGame(
+            store.resetGame,
+            useLocalTradeDriver.getState().reset,
+            () => setMode('home'),
+          )
+        }
       />
     )
   }

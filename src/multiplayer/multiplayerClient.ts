@@ -13,13 +13,16 @@ export type ConnectionState =
   | 'connecting'
   | 'connected'
   | 'disconnected'
+  | 'reconnecting'
+  | 'resuming'
+  | 'failed'
   | 'unavailable'
 
 export interface RoomView {
   id: string
   hostPlayerId: string
   status: 'lobby' | 'playing' | 'finished'
-  players: { id: string; displayName: string; connected: boolean }[]
+  players: { id: string; displayName: string; connected: boolean; graceExpiresAt?: number }[]
 }
 
 export interface MultiplayerSession {
@@ -36,7 +39,12 @@ export interface MultiplayerClientHandlers {
   onGameLog?: (entries: string[]) => void
   onConnectionState?: (state: ConnectionState) => void
   onRoomLeft?: () => void
+  onRecoveryFailed?: () => void
   onChatMessage?: (message: ChatMessage) => void
+}
+
+function logReconnectDiagnostic(message: string): void {
+  if (import.meta.env.DEV) console.info(`[multiplayer] ${message}`)
 }
 
 function storage(): Storage | undefined {
@@ -74,13 +82,18 @@ export function createMultiplayerClient(
   handlers: MultiplayerClientHandlers = {},
 ) {
   const socket: Socket = io(url, { autoConnect: false })
-  let resumingSession = false
+  let resumePendingSocketId: string | undefined
+  let resumeAttemptSocketId: string | undefined
   if (handlers.onRoomState) socket.on('room:state', handlers.onRoomState)
   if (handlers.onGameState) socket.on('game:state', handlers.onGameState)
   socket.on('game:error', (message: string) => {
-    if (resumingSession) {
+    if (resumePendingSocketId === socket.id) {
+      logReconnectDiagnostic('resume failed')
       clearSavedSession()
-      resumingSession = false
+      resumePendingSocketId = undefined
+      handlers.onRecoveryFailed?.()
+      handlers.onConnectionState?.('failed')
+      return
     }
     handlers.onError?.(message)
   })
@@ -98,7 +111,10 @@ export function createMultiplayerClient(
   )
   socket.on('session:restored', (session: MultiplayerSession) => {
     saveSession(session)
-    resumingSession = false
+    if (resumePendingSocketId === socket.id)
+      logReconnectDiagnostic('resume restored')
+    resumePendingSocketId = undefined
+    handlers.onConnectionState?.('connected')
     handlers.onSessionRestored?.(session)
   })
   socket.on('room:left', () => {
@@ -106,14 +122,25 @@ export function createMultiplayerClient(
     handlers.onRoomLeft?.()
   })
   socket.on('connect', () => {
-    handlers.onConnectionState?.('connected')
+    logReconnectDiagnostic('socket connected')
     const session = getSavedSession()
-    if (session) {
-      resumingSession = true
-      socket.emit('session:resume', session)
+    if (!session) {
+      handlers.onConnectionState?.('connected')
+      return
     }
+    if (resumeAttemptSocketId === socket.id) return
+    resumeAttemptSocketId = socket.id
+    resumePendingSocketId = socket.id
+    handlers.onConnectionState?.('resuming')
+    logReconnectDiagnostic('resume attempt')
+    socket.emit('session:resume', session)
   })
-  socket.on('disconnect', () => handlers.onConnectionState?.('disconnected'))
+  socket.on('disconnect', (reason: string) => {
+    logReconnectDiagnostic(`socket disconnected: ${reason}`)
+    resumePendingSocketId = undefined
+    resumeAttemptSocketId = undefined
+    handlers.onConnectionState?.('reconnecting')
+  })
   socket.on('connect_error', () => handlers.onConnectionState?.('unavailable'))
 
   return {

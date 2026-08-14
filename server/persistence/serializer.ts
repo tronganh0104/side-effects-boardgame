@@ -10,13 +10,16 @@ export function serializeRoom(room: Room): PersistedRoomSnapshot {
         id: player.id,
         displayName: player.displayName,
         connected: player.connected,
+        ...(player.graceExpiresAt !== undefined
+          ? { graceExpiresAt: player.graceExpiresAt }
+          : {}),
       })),
     },
   }
 }
 
 export function deserializeRoom(snapshot: PersistedRoomSnapshot): Room {
-  if (snapshot.schemaVersion !== 2 && snapshot.schemaVersion !== ROOM_SNAPSHOT_SCHEMA_VERSION)
+  if (snapshot.schemaVersion !== 2 && snapshot.schemaVersion !== 3 && snapshot.schemaVersion !== ROOM_SNAPSHOT_SCHEMA_VERSION)
     throw new Error(`Unsupported room snapshot schema: ${snapshot.schemaVersion}`)
   const room = snapshot.room
   if (
