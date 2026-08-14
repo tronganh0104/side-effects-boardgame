@@ -210,7 +210,7 @@ describe('room persistence', () => {
     await first.flushPersistence(source.room.id)
 
     const persisted = (await repository.loadActive()).find((snapshot) => snapshot.room.id === source.room.id)!
-    expect(persisted.schemaVersion).toBe(4)
+    expect(persisted.schemaVersion).toBe(5)
     expect(persisted.room.players.map((player) => player.graceExpiresAt)).toEqual(firstDeadline)
     first.dispose()
 

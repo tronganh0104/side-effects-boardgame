@@ -2,6 +2,7 @@ import type { Translation } from './types'
 
 export const vi: Translation = {
   strings: {
+    accountRecoveryTitle: 'Ván đang chơi', accountRecoveryBody: 'Bạn vẫn còn một chỗ trong ván trước.', accountReturnToGame: 'Quay lại ván', accountRecoveryElsewhere: 'Ván này đang mở ở một thiết bị khác.', accountTakeover: 'Dùng thiết bị này', accountSessionReplaced: 'Ván đã được tiếp tục ở một thiết bị khác.',
     authAccount: 'Tài khoản', authSignIn: 'Đăng nhập', authSignUp: 'Đăng ký', authCreateAccount: 'Tạo tài khoản', authSignOut: 'Đăng xuất', authSignedIn: 'Đã đăng nhập', authEmail: 'Email', authPassword: 'Mật khẩu', authPasswordConfirmation: 'Xác nhận mật khẩu', authInvalidEmail: 'Email không hợp lệ.', authMissingPassword: 'Mật khẩu không được để trống.', authPasswordMismatch: 'Mật khẩu không khớp.', authInvalidPassword: 'Mật khẩu không đạt yêu cầu.', authDuplicateAccount: 'Không thể tạo tài khoản với email này. Hãy thử đăng nhập nếu bạn đã có tài khoản.', authSignUpFailed: 'Không thể tạo tài khoản. Vui lòng thử lại.', authConfirmationRequired: 'Tài khoản đã được tạo. Hãy kiểm tra email để xác nhận tài khoản trước khi đăng nhập.', authSubmitting: 'Đang xử lý...',
     title: 'Side Effect', chooseMode: 'Chọn cách chơi.', localGame: 'Chơi cùng máy', onlineGame: 'Chơi trực tuyến',
     back: 'Quay lại', player: 'Người chơi', remove: 'Xóa', addPlayer: 'Thêm người chơi', startGame: 'Bắt đầu',

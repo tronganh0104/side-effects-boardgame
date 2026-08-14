@@ -7,6 +7,7 @@ import {
   createMultiplayerClient,
   multiplayerServerUrl,
   type ConnectionState,
+  type AccountRecoveryView,
   type MultiplayerSession,
   type RoomView,
 } from '../multiplayer/multiplayerClient'
@@ -20,9 +21,10 @@ import {
 
 interface OnlineLobbyProps {
   onBack: () => void
+  recoverOnMount?: boolean
 }
 
-export function OnlineLobby({ onBack }: OnlineLobbyProps) {
+export function OnlineLobby({ onBack, recoverOnMount = false }: OnlineLobbyProps) {
   const [displayName, setDisplayName] = useState('')
   const [roomCode, setRoomCode] = useState('')
   const [room, setRoom] = useState<RoomView>()
@@ -32,10 +34,12 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
   const [gameLog, setGameLog] = useState<string[]>([])
   const [connectionState, setConnectionState] =
     useState<ConnectionState>('connecting')
+  const [accountRecovery, setAccountRecovery] = useState<AccountRecoveryView>({ status: 'none' })
   const [now, setNow] = useState(() => Date.now())
   const clientRef = useRef<ReturnType<typeof createMultiplayerClient> | null>(
     null,
   )
+  const recoveryClaimedRef = useRef(false)
 
   const resetRoomUi = () => {
     resetMultiplayerRoomUi({
@@ -64,6 +68,12 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
           resetRoomUi()
         },
         onRecoveryFailed: resetRoomUi,
+        onAccountRecovery: setAccountRecovery,
+        onSessionReplaced: () => {
+          resetRoomUi()
+          setAccountRecovery({ status: 'none' })
+          setError(t('accountSessionReplaced'))
+        },
       },
     )
     clientRef.current = client
@@ -72,6 +82,12 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
       client.disconnect()
     }
   }, [])
+
+  useEffect(() => {
+    if (!recoverOnMount || recoveryClaimedRef.current || accountRecovery.status === 'none') return
+    recoveryClaimedRef.current = true
+    clientRef.current?.recoverAccountSession(accountRecovery.status === 'already-connected')
+  }, [accountRecovery, recoverOnMount])
 
   useEffect(() => {
     if (!game || !room?.players.some((player) => player.graceExpiresAt !== undefined)) return
@@ -253,7 +269,22 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
           </p>
         )}
 
-        {!room && (
+        {!room && accountRecovery?.status !== 'none' && (
+          <div className="account-recovery-card">
+            <h2>{t('accountRecoveryTitle')}</h2>
+            <p>{accountRecovery.status === 'already-connected' ? t('accountRecoveryElsewhere') : t('accountRecoveryBody')}</p>
+            {accountRecovery.roomId && <p>{t('roomCode')}: <strong>{accountRecovery.roomId}</strong></p>}
+            <button
+              type="button"
+              className="primary"
+              onClick={() => clientRef.current?.recoverAccountSession(accountRecovery.status === 'already-connected')}
+            >
+              {accountRecovery.status === 'already-connected' ? t('accountTakeover') : t('accountReturnToGame')}
+            </button>
+          </div>
+        )}
+
+        {!room && accountRecovery?.status === 'none' && (
           <>
             <label className="name-field">
               <span className="label">{t('displayName')}</span>

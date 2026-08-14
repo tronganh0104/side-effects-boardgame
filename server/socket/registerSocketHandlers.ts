@@ -11,6 +11,7 @@ import type { Room } from '../rooms/types'
 import { createTradeGateway } from '../trade/tradeGateway'
 import { lockableCardId } from '../trade/lockedCardGuard'
 import { createSocketAuthMiddleware } from '../auth/socketAuth'
+import type { AuthenticatedSocketData } from '../auth/socketAuth'
 import type { AccessTokenVerifier } from '../auth/supabaseTokenVerifier'
 
 interface Session {
@@ -189,6 +190,14 @@ export function registerSocketHandlers(
       throw new Error('This socket session is no longer active.')
     return session
   }
+  const authenticatedUserId = (socket: Socket): string | undefined =>
+    (socket.data as AuthenticatedSocketData).authUserId
+  const recoveryPayload = (room: Room, player: Room['players'][number], status: 'recoverable' | 'already-connected') => ({
+    status,
+    roomId: room.id,
+    playerId: player.id,
+    displayName: player.displayName,
+  })
 
   io.on('connection', (socket) => {
     chat.attach(socket, () => activeSession(socket), (error) => fail(socket, error))
@@ -197,7 +206,7 @@ export function registerSocketHandlers(
     socket.on('room:create', (payload: unknown) => {
         try {
           const { displayName } = parseRoomCreatePayload(payload)
-          const { room, player, session } = rooms.createRoom(displayName, socket.id)
+          const { room, player, session } = rooms.createRoom(displayName, socket.id, authenticatedUserId(socket))
           sessions.set(socket.id, { roomId: room.id, playerId: player.id })
           socket.join(room.id)
           socket.emit('session:restored', session)
@@ -214,6 +223,7 @@ export function registerSocketHandlers(
             roomId,
             displayName,
             socket.id,
+            authenticatedUserId(socket),
           )
           sessions.set(socket.id, { roomId, playerId: player.id })
           socket.join(roomId)
@@ -232,6 +242,7 @@ export function registerSocketHandlers(
           playerId,
           sessionToken,
           socket.id,
+          authenticatedUserId(socket),
         )
         sessions.set(socket.id, { roomId, playerId })
         socket.join(roomId)
@@ -241,6 +252,51 @@ export function registerSocketHandlers(
       } catch {
         // Do not reveal whether a room, player, or credential was invalid.
         socket.emit('game:error', 'Unable to restore session.')
+      }
+    })
+
+    socket.on('session:recover', () => {
+      const userId = authenticatedUserId(socket)
+      if (!userId) {
+        socket.emit('session:recovery', { status: 'none' })
+        return
+      }
+      const recovery = rooms.findAccountRecovery(userId)
+      socket.emit(
+        'session:recovery',
+        recovery
+          ? recoveryPayload(recovery.room, recovery.player, recovery.status)
+          : { status: 'none' },
+      )
+    })
+
+    socket.on('session:recover:claim', (payload: unknown) => {
+      try {
+        const userId = authenticatedUserId(socket)
+        if (!userId) throw new Error('Unable to recover session.')
+        const takeover = Boolean(
+          payload && typeof payload === 'object' && !Array.isArray(payload) &&
+          (payload as Record<string, unknown>).takeover === true,
+        )
+        const recovered = rooms.recoverAccountSession(userId, socket.id, takeover)
+        if (recovered.replacedSocketId) {
+          trade.closeRoomSessions(recovered.room.id, 'cancelled')
+          io.to(recovered.replacedSocketId).emit('session:replaced')
+          sessions.delete(recovered.replacedSocketId)
+        }
+        sessions.set(socket.id, { roomId: recovered.room.id, playerId: recovered.player.id })
+        socket.join(recovered.room.id)
+        socket.emit('session:restored', recovered.session)
+        broadcastRoom(recovered.room)
+        broadcastGame(recovered.room)
+      } catch (error) {
+        if (error instanceof Error && error.message === 'This session is active elsewhere.') {
+          const recovery = userIdForRecovery(socket, rooms)
+          if (recovery)
+            socket.emit('session:recovery', recoveryPayload(recovery.room, recovery.player, 'already-connected'))
+          return
+        }
+        socket.emit('game:error', 'Unable to recover session.')
       }
     })
 
@@ -357,4 +413,9 @@ export function registerSocketHandlers(
       }
     })
   })
+}
+
+function userIdForRecovery(socket: Socket, rooms: RoomService) {
+  const userId = (socket.data as AuthenticatedSocketData).authUserId
+  return userId ? rooms.findAccountRecovery(userId) : undefined
 }

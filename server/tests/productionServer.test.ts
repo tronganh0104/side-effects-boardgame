@@ -48,6 +48,16 @@ describe('production server configuration', () => {
       url: 'https://example.supabase.co',
       secretKey: 'server-only-key',
     })
+    expect(
+      getServerConfig({
+        SUPABASE_URL: 'https://example.supabase.co',
+        SUPABASE_SECRET_KEY: 'server-only-key',
+      }),
+    ).toEqual({
+      port: 3001,
+      clientOrigins: ['http://localhost:5173'],
+      supabaseAuthUrl: 'https://example.supabase.co',
+    })
   })
 
   it('serves a non-sensitive health response', async () => {

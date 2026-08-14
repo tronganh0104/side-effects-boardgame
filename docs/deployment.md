@@ -27,6 +27,7 @@ Typical values:
 - `CLIENT_ORIGIN`
 - `SUPABASE_URL`
 - `SUPABASE_SECRET_KEY`
+- `SUPABASE_ROOM_PERSISTENCE`
 
 ## Auth
 
@@ -38,10 +39,23 @@ before using login or registration. With **Confirm email** enabled, registration
 creates an account without an application session until the user confirms the
 email and signs in; with it disabled, Supabase can return a session immediately.
 
+## Account-linked room recovery
+
+Authenticated players have their verified Supabase user ID stored only inside
+the room snapshot. If they reopen the site within the authoritative game
+disconnect grace period, they can choose to return to the same seat without
+the tab-scoped room credential. Guests still require that credential. A second
+tab or device must explicitly take over the seat; it replaces the old socket.
+Finished games and seats whose 2-player grace has expired are never recovered.
+Snapshots before schema v5 remain legacy token-recoverable rooms.
+
 ## Storage
 
-- Without Supabase variables, the server uses in-memory storage.
-- With Supabase variables, room snapshots can be persisted.
+- Local development uses in-memory rooms by default, even when `SUPABASE_URL`
+  is present for Auth verification.
+- Production enables Supabase room persistence through `NODE_ENV=production`.
+  Set `SUPABASE_ROOM_PERSISTENCE=true` only when intentionally enabling it in
+  another environment.
 
 ## Release checklist
 

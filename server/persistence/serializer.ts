@@ -8,6 +8,7 @@ export function serializeRoom(room: Room): PersistedRoomSnapshot {
       ...room,
       players: room.players.map((player) => ({
         id: player.id,
+        ...(player.userId !== undefined ? { userId: player.userId } : {}),
         displayName: player.displayName,
         connected: player.connected,
         ...(player.graceExpiresAt !== undefined
@@ -19,7 +20,7 @@ export function serializeRoom(room: Room): PersistedRoomSnapshot {
 }
 
 export function deserializeRoom(snapshot: PersistedRoomSnapshot): Room {
-  if (snapshot.schemaVersion !== 2 && snapshot.schemaVersion !== 3 && snapshot.schemaVersion !== ROOM_SNAPSHOT_SCHEMA_VERSION)
+  if (![2, 3, 4, ROOM_SNAPSHOT_SCHEMA_VERSION].includes(snapshot.schemaVersion))
     throw new Error(`Unsupported room snapshot schema: ${snapshot.schemaVersion}`)
   const room = snapshot.room
   if (
@@ -45,6 +46,7 @@ export function deserializeRoom(snapshot: PersistedRoomSnapshot): Room {
     pendingDecision: migratedPendingDecision,
     players: room.players.map((player) => ({
       ...player,
+      ...(typeof player.userId === 'string' && player.userId ? { userId: player.userId } : {}),
       connected: false,
       socketId: undefined,
     })),
