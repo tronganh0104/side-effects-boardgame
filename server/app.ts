@@ -37,8 +37,8 @@ export function createGameServer(
     io,
     rooms,
     dependencies.authVerifier ??
-      (config.supabase
-        ? createSupabaseTokenVerifier(config.supabase.url)
+      (config.supabaseAuthUrl
+        ? createSupabaseTokenVerifier(config.supabaseAuthUrl)
         : undefined),
   )
   httpServer.on('close', () => rooms.dispose())

@@ -14,6 +14,7 @@ import '../styles/index.css'
 
 export function App() {
   const [mode, setMode] = useState<'home' | 'local' | 'online'>('home')
+  const [recoverOnOnline, setRecoverOnOnline] = useState(false)
   const store = useGameStore()
   const game = store.gameState
 
@@ -36,10 +37,20 @@ export function App() {
     return (
       <HomeScreen
         onLocal={() => setMode('local')}
-        onOnline={() => setMode('online')}
+        onOnline={() => {
+          setRecoverOnOnline(false)
+          setMode('online')
+        }}
+        onRecover={() => {
+          setRecoverOnOnline(true)
+          setMode('online')
+        }}
       />
     )
-  if (mode === 'online') return <OnlineLobby onBack={() => setMode('home')} />
+  if (mode === 'online') return <OnlineLobby onBack={() => {
+    setRecoverOnOnline(false)
+    setMode('home')
+  }} recoverOnMount={recoverOnOnline} />
   if (!game)
     return <SetupScreen error={store.error} onStart={store.createLocalGame} />
   if (game.status === 'finished') {

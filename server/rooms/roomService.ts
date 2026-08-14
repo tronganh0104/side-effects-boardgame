@@ -37,6 +37,12 @@ export interface SessionCredential {
   sessionToken: string
 }
 
+export interface AccountRecovery {
+  room: Room
+  player: RoomPlayer
+  status: 'recoverable' | 'already-connected'
+}
+
 export interface Clock {
   now(): number
 }
@@ -97,8 +103,10 @@ export class RoomService {
   createRoom(
     displayName: string,
     socketId?: string,
+    userId?: string,
   ): { room: Room; player: RoomPlayer; session: SessionCredential } {
-    const player = this.createPlayer(displayName, socketId)
+    this.ensureNoActivePlayingRoom(userId)
+    const player = this.createPlayer(displayName, socketId, userId)
     const sessionToken = createSessionToken()
     const room: Room = {
       id: this.createRoomCode(),
@@ -121,8 +129,10 @@ export class RoomService {
     roomId: string,
     displayName: string,
     socketId?: string,
+    userId?: string,
   ): { room: Room; player: RoomPlayer; session: SessionCredential } {
     const room = this.requireRoom(roomId)
+    this.ensureNoActivePlayingRoom(userId, roomId)
     if (room.status !== 'lobby')
       throw new Error('Cannot join a room after the game has started.')
     this.validateDisplayName(displayName)
@@ -132,7 +142,9 @@ export class RoomService {
     )
       throw new Error('Display names must be unique in a room.')
 
-    const player = this.createPlayer(displayName, socketId)
+    if (userId && room.players.some((player) => player.userId === userId))
+      throw new Error('This account already has a seat in this room.')
+    const player = this.createPlayer(displayName, socketId, userId)
     const sessionToken = createSessionToken()
     room.players.push(player)
     room.sessionTokenHashes[player.id] = hashSessionToken(sessionToken)
@@ -306,11 +318,14 @@ export class RoomService {
     playerId: string,
     sessionToken: string,
     socketId: string,
+    authUserId?: string,
   ): Room {
     const room = this.requireRoom(roomId)
     const player = room.players.find((candidate) => candidate.id === playerId)
     const tokenHash = room.sessionTokenHashes[playerId]
     if (!player || !tokenHash || !matchesSessionToken(sessionToken, tokenHash))
+      throw new Error('Unable to restore session.')
+    if (player.userId && authUserId && player.userId !== authUserId)
       throw new Error('Unable to restore session.')
     if (
       room.status === 'playing' &&
@@ -330,6 +345,56 @@ export class RoomService {
     this.persistRoom(room)
     this.notifyMutation(room)
     return room
+  }
+
+  findAccountRecovery(userId: string): AccountRecovery | undefined {
+    for (const room of this.rooms.values()) {
+      if (room.status === 'finished') continue
+      const player = room.players.find((candidate) => candidate.userId === userId)
+      if (!player) continue
+      if (
+        room.status === 'playing' &&
+        room.players.length === 2 &&
+        player.graceExpiresAt !== undefined &&
+        this.clock.now() >= player.graceExpiresAt
+      ) {
+        this.abandonTwoPlayer(room, player.id)
+        continue
+      }
+      return { room, player, status: player.connected ? 'already-connected' : 'recoverable' }
+    }
+    return undefined
+  }
+
+  recoverAccountSession(
+    userId: string,
+    socketId: string,
+    takeover = false,
+  ): { room: Room; player: RoomPlayer; session: SessionCredential; replacedSocketId?: string } {
+    const recovery = this.findAccountRecovery(userId)
+    if (!recovery) throw new Error('No recoverable session.')
+    if (recovery.status === 'already-connected' && !takeover)
+      throw new Error('This session is active elsewhere.')
+    const { room, player } = recovery
+    const replacedSocketId = player.connected && player.socketId !== socketId
+      ? player.socketId
+      : undefined
+    const previousDeadline = player.graceExpiresAt
+    player.connected = true
+    player.socketId = socketId
+    delete player.graceExpiresAt
+    if (previousDeadline !== undefined) this.clearDisconnectTimer(room.id, player.id)
+    const sessionToken = createSessionToken()
+    room.sessionTokenHashes[player.id] = hashSessionToken(sessionToken)
+    room.gameLog = [...room.gameLog, `${player.displayName} đã kết nối lại.`].slice(-30)
+    this.persistRoom(room)
+    this.notifyMutation(room)
+    return {
+      room,
+      player,
+      session: { roomId: room.id, playerId: player.id, sessionToken },
+      ...(replacedSocketId ? { replacedSocketId } : {}),
+    }
   }
 
   markDisconnected(roomId: string, playerId: string, socketId?: string): Room {
@@ -359,9 +424,12 @@ export class RoomService {
         if (this.rooms.has(room.id))
           throw new Error(`Duplicate persisted room code: ${room.id}`)
         this.rooms.set(room.id, room)
-        if (snapshot.schemaVersion === 3 && room.status === 'playing') {
-          for (const player of room.players)
-            if (!player.connected) player.graceExpiresAt = this.clock.now() + DISCONNECT_GRACE_MS
+        if (room.status === 'playing') {
+          for (const player of room.players) {
+            const persistedPlayer = snapshot.room.players.find((candidate) => candidate.id === player.id)
+            if (snapshot.schemaVersion === 3 || (persistedPlayer?.connected && player.graceExpiresAt === undefined))
+              player.graceExpiresAt = this.clock.now() + DISCONNECT_GRACE_MS
+          }
           this.persistRoom(room)
         }
         for (const player of room.players) {
@@ -396,13 +464,23 @@ export class RoomService {
   private createPlayer(
     displayName: string,
     socketId?: string,
+    userId?: string,
   ): RoomPlayer {
     this.validateDisplayName(displayName)
     return {
       id: this.createPlayerId(),
+      ...(userId ? { userId } : {}),
       displayName: displayName.trim(),
       connected: true,
       socketId,
+    }
+  }
+
+  private ensureNoActivePlayingRoom(userId?: string, allowedRoomId?: string): void {
+    if (!userId) return
+    for (const room of this.rooms.values()) {
+      if (room.id !== allowedRoomId && room.status === 'playing' && room.players.some((player) => player.userId === userId))
+        throw new Error('You already have an active game.')
     }
   }
 

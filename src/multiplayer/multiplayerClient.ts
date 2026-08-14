@@ -7,8 +7,15 @@ import { useTradeStore } from '../store/tradeStore'
 import { getAuthAccessToken } from '../auth/authStore'
 
 export const SESSION_KEY = 'side-effect.room-session'
-export const multiplayerServerUrl =
-  import.meta.env.VITE_MULTIPLAYER_SERVER_URL ?? 'http://localhost:3001'
+export const DEFAULT_MULTIPLAYER_SERVER_URL = 'http://localhost:3001'
+
+export function resolveMultiplayerServerUrl(configuredUrl?: string): string {
+  return configuredUrl?.trim() || DEFAULT_MULTIPLAYER_SERVER_URL
+}
+
+export const multiplayerServerUrl = resolveMultiplayerServerUrl(
+  import.meta.env.VITE_MULTIPLAYER_SERVER_URL,
+)
 
 export type ConnectionState =
   | 'connecting'
@@ -32,6 +39,13 @@ export interface MultiplayerSession {
   sessionToken: string
 }
 
+export interface AccountRecoveryView {
+  status: 'none' | 'recoverable' | 'already-connected'
+  roomId?: string
+  playerId?: string
+  displayName?: string
+}
+
 export interface MultiplayerClientHandlers {
   onRoomState?: (room: RoomView) => void
   onGameState?: (game: PlayerGameView) => void
@@ -41,6 +55,8 @@ export interface MultiplayerClientHandlers {
   onConnectionState?: (state: ConnectionState) => void
   onRoomLeft?: () => void
   onRecoveryFailed?: () => void
+  onAccountRecovery?: (recovery: AccountRecoveryView) => void
+  onSessionReplaced?: () => void
   onChatMessage?: (message: ChatMessage) => void
 }
 
@@ -81,6 +97,7 @@ export function clearSavedSession(): void {
 export function createMultiplayerClient(
   url: string,
   handlers: MultiplayerClientHandlers = {},
+  options: { autoResume?: boolean } = {},
 ) {
   const socket: Socket = io(url, {
     autoConnect: false,
@@ -92,6 +109,12 @@ export function createMultiplayerClient(
   })
   let resumePendingSocketId: string | undefined
   let resumeAttemptSocketId: string | undefined
+  let accountLookupSocketId: string | undefined
+  const requestAccountRecovery = () => {
+    if (accountLookupSocketId === socket.id) return
+    accountLookupSocketId = socket.id
+    socket.emit('session:recover')
+  }
   if (handlers.onRoomState) socket.on('room:state', handlers.onRoomState)
   if (handlers.onGameState) socket.on('game:state', handlers.onGameState)
   socket.on('game:error', (message: string) => {
@@ -101,6 +124,7 @@ export function createMultiplayerClient(
       resumePendingSocketId = undefined
       handlers.onRecoveryFailed?.()
       handlers.onConnectionState?.('failed')
+      requestAccountRecovery()
       return
     }
     handlers.onError?.(message)
@@ -125,6 +149,13 @@ export function createMultiplayerClient(
     handlers.onConnectionState?.('connected')
     handlers.onSessionRestored?.(session)
   })
+  socket.on('session:recovery', (recovery: AccountRecoveryView) =>
+    handlers.onAccountRecovery?.(recovery),
+  )
+  socket.on('session:replaced', () => {
+    clearSavedSession()
+    handlers.onSessionReplaced?.()
+  })
   socket.on('room:left', () => {
     clearSavedSession()
     handlers.onRoomLeft?.()
@@ -132,8 +163,9 @@ export function createMultiplayerClient(
   socket.on('connect', () => {
     logReconnectDiagnostic('socket connected')
     const session = getSavedSession()
-    if (!session) {
+    if (!session || options.autoResume === false) {
       handlers.onConnectionState?.('connected')
+      requestAccountRecovery()
       return
     }
     if (resumeAttemptSocketId === socket.id) return
@@ -147,6 +179,7 @@ export function createMultiplayerClient(
     logReconnectDiagnostic(`socket disconnected: ${reason}`)
     resumePendingSocketId = undefined
     resumeAttemptSocketId = undefined
+    accountLookupSocketId = undefined
     handlers.onConnectionState?.('reconnecting')
   })
   socket.on('connect_error', () => handlers.onConnectionState?.('unavailable'))
@@ -165,6 +198,8 @@ export function createMultiplayerClient(
       }),
     startRoom: () => socket.emit('room:start'),
     leaveRoom: () => socket.emit('room:leave'),
+    recoverAccountSession: (takeover = false) =>
+      socket.emit('session:recover:claim', { takeover }),
     sendCommand: (command: GameCommand) => socket.emit('game:command', command),
     resolveDecision: (decisionId: string, choiceIds: string[]) =>
       socket.emit('game:decision', { decisionId, choiceIds }),

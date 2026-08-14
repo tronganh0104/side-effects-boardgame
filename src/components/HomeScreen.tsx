@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react'
+import { useAuthStore } from '../auth/authStore'
 import { t } from '../i18n'
+import { createMultiplayerClient, multiplayerServerUrl, type AccountRecoveryView } from '../multiplayer/multiplayerClient'
 import { AuthPanel } from './AuthPanel'
 import logo480 from '../assets/logo-480.webp'
 import logo900 from '../assets/logo-900.webp'
@@ -6,9 +9,20 @@ import logo900 from '../assets/logo-900.webp'
 interface HomeScreenProps {
   onLocal: () => void
   onOnline: () => void
+  onRecover: () => void
 }
 
-export function HomeScreen({ onLocal, onOnline }: HomeScreenProps) {
+export function HomeScreen({ onLocal, onOnline, onRecover }: HomeScreenProps) {
+  const user = useAuthStore((state) => state.user)
+  const [recovery, setRecovery] = useState<AccountRecoveryView>({ status: 'none' })
+
+  useEffect(() => {
+    if (!user) return
+    const client = createMultiplayerClient(multiplayerServerUrl, { onAccountRecovery: setRecovery }, { autoResume: false })
+    client.connect()
+    return () => { client.disconnect() }
+  }, [user?.id])
+
   return (
     <main className="setup-screen">
       <section className="panel home-screen panel-surface panel-surface--framed">
@@ -29,6 +43,15 @@ export function HomeScreen({ onLocal, onOnline }: HomeScreenProps) {
         />
         <p className="tagline">"Trị lành hay điên thêm?"</p>
         <AuthPanel />
+        {recovery.status !== 'none' && (
+          <section className="account-recovery-card" aria-label={t('accountRecoveryTitle')}>
+            <h2>{t('accountRecoveryTitle')}</h2>
+            <p>{recovery.status === 'already-connected' ? t('accountRecoveryElsewhere') : t('accountRecoveryBody')}</p>
+            <button type="button" className="primary" onClick={onRecover}>
+              {recovery.status === 'already-connected' ? t('accountTakeover') : t('accountReturnToGame')}
+            </button>
+          </section>
+        )}
         <div className="divider" aria-hidden="true">
           <span className="divider-ornament">♦</span>
         </div>

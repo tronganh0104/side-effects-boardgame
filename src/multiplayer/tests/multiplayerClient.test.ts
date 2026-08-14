@@ -39,6 +39,7 @@ import {
   SESSION_KEY,
   createMultiplayerClient,
   getSavedSession,
+  resolveMultiplayerServerUrl,
 } from '../multiplayerClient'
 import {
   exitFinishedLocalGame,
@@ -84,6 +85,12 @@ describe('multiplayer client reconnect lifecycle', () => {
     vi.stubGlobal('window', { sessionStorage })
   }
 
+  it('uses the configured local backend URL and treats missing or blank configuration as localhost:3001', () => {
+    expect(resolveMultiplayerServerUrl(' http://localhost:4100 ')).toBe('http://localhost:4100')
+    expect(resolveMultiplayerServerUrl(undefined)).toBe('http://localhost:3001')
+    expect(resolveMultiplayerServerUrl('   ')).toBe('http://localhost:3001')
+  })
+
   it('emits one automatic resume with the saved credential per socket connection', () => {
     installStorage()
     createMultiplayerClient('http://example.test')
@@ -106,6 +113,38 @@ describe('multiplayer client reconnect lifecycle', () => {
     expect(mock.emitted).not.toContainEqual(
       expect.objectContaining({ event: 'session:resume' }),
     )
+  })
+
+  it('looks up account recovery when no legacy room credential exists', () => {
+    installStorage()
+    sessionStorage.clear()
+    const recoveries: unknown[] = []
+    createMultiplayerClient('http://example.test', { onAccountRecovery: (recovery) => recoveries.push(recovery) })
+
+    mock.serverEmit('connect')
+    expect(mock.emitted).toContainEqual({ event: 'session:recover', payload: undefined })
+    mock.serverEmit('session:recovery', { status: 'recoverable', roomId: 'ABC123', playerId: 'player-1', displayName: 'Ada' })
+    expect(recoveries).toEqual([{ status: 'recoverable', roomId: 'ABC123', playerId: 'player-1', displayName: 'Ada' }])
+  })
+
+  it('keeps legacy resume preferred and only claims account recovery after an explicit action', () => {
+    installStorage()
+    const client = createMultiplayerClient('http://example.test')
+    mock.serverEmit('connect')
+    expect(mock.emitted.filter((entry) => entry.event === 'session:recover')).toEqual([])
+
+    client.recoverAccountSession(true)
+    expect(mock.emitted).toContainEqual({ event: 'session:recover:claim', payload: { takeover: true } })
+  })
+
+  it('clears the old room credential when another device replaces this socket', () => {
+    installStorage()
+    const replaced = vi.fn()
+    createMultiplayerClient('http://example.test', { onSessionReplaced: replaced })
+
+    mock.serverEmit('session:replaced')
+    expect(getSavedSession()).toBeUndefined()
+    expect(replaced).toHaveBeenCalledOnce()
   })
 
   it('allows exactly one fresh resume after a later disconnect and reconnect', () => {

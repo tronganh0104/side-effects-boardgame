@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { createGameServer } from './app'
 import { getServerConfig } from './config'
 
