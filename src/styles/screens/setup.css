@@ -89,7 +89,25 @@
   font-style: italic;
   margin-bottom: 1.6rem;
 }
-.home-screen .divider { height: 1px; background: var(--panel-rule, rgba(26, 16, 6, 0.28)); margin: 1.4rem 0; }
+.home-screen .divider {
+  display: flex;
+  align-items: center;
+  margin: 2rem 0;
+}
+.home-screen .divider::before,
+.home-screen .divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--panel-rule, rgba(26, 16, 6, 0.28));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+.home-screen .divider .divider-ornament {
+  color: var(--panel-brass, #76512f);
+  font-size: 0.65rem;
+  margin: 0 0.9rem;
+  opacity: 0.7;
+}
 
 .setup-subtitle {
   color: var(--panel-ink-2, #261b14);
@@ -98,53 +116,66 @@
   margin-top: 0.15rem;
 }
 
-.button-row { display: flex; flex-direction: column; gap: 0.7rem; margin-top: 1rem; }
+.button-row { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.2rem; }
 .home-screen .button-row { flex-direction: column; }
 .button-row .btn-sub {
   display: block;
   font-size: var(--setup-fs-micro);
   opacity: 0.75;
-  margin-top: 0.1rem;
+  margin-top: 0.15rem;
 }
 
 
-/* ── Buttons ──
-   base.css's plain `button`/`.primary` are teal-on-navy; both are
-   overridden here scoped to `.button-row` (the home + local-setup
-   actions), at a specificity base.css's rules cannot win regardless of
-   source order, so nothing outside this row is touched.
-   font-weight is inert (fonts.css ships one weight only — see tokens.css's
-   font-synthesis-weight: none), so the primary label's emphasis is
-   synthesised with a same-colour text-stroke instead of the dead
-   font-weight: 800 base.css sets. 0.45px is ~2.8% of the 16px button text
-   — inside the 2.5-3% band that reads as emphasis without filling any
-   letterform detail (the button label isn't small-caps, so there are no
-   counters to worry about here). */
+/* ── Buttons ── */
+.button-row button {
+  position: relative;
+  border-radius: 2px;
+  padding: 0.9rem 1rem;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
 .button-row .primary {
   background: var(--panel-oxblood, #5c2119);
   color: var(--panel-paper-hi, #dcc5af);
   border: 2px solid var(--panel-brass, #76512f);
-  box-shadow: 0 10px 22px rgba(26, 16, 6, 0.35);
+  box-shadow: 
+    0 6px 16px rgba(26, 16, 6, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   -webkit-text-stroke: 0.45px var(--panel-paper-hi, #dcc5af);
   paint-order: stroke fill;
 }
+
 .button-row .primary:hover:not(:disabled),
 .button-row .primary:focus-visible {
   filter: brightness(1.08);
-  box-shadow:
-    0 12px 26px rgba(26, 16, 6, 0.45),
+  transform: translateY(-1px);
+  box-shadow: 
+    0 8px 20px rgba(26, 16, 6, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
     0 0 0 3px color-mix(in srgb, var(--panel-brass, #76512f) 35%, transparent);
+}
+.button-row .primary:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 2px 6px rgba(26, 16, 6, 0.2);
 }
 
 .button-row button:not(.primary) {
-  background: var(--panel-paper-hi, #dcc5af);
+  background: color-mix(in srgb, var(--panel-paper-hi, #dcc5af) 40%, transparent);
   color: var(--panel-ink, #1a1006);
   border: 2px solid var(--panel-brass, #76512f);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
+
 .button-row button:not(.primary):hover:not(:disabled),
 .button-row button:not(.primary):focus-visible {
-  background: color-mix(in srgb, var(--panel-brass, #76512f) 14%, var(--panel-paper-hi, #dcc5af));
+  background: color-mix(in srgb, var(--panel-brass, #76512f) 10%, var(--panel-paper-hi, #dcc5af));
   border-color: var(--panel-oxblood, #5c2119);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(26, 16, 6, 0.15);
+}
+.button-row button:not(.primary):active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
 }
 
 
@@ -246,6 +277,244 @@
   font-size: var(--setup-fs-body);
   -webkit-text-stroke: 0.4px var(--panel-ink, #1a1006);
   paint-order: stroke fill;
+}
+
+/* ── Auth Panel ── */
+.auth-panel {
+  width: 100%;
+  max-width: 24rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem;
+  background: color-mix(in srgb, var(--panel-paper-tint, #9e8769) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--panel-rule, rgba(26, 16, 6, 0.28)) 50%, transparent);
+  border-radius: 2px;
+  box-shadow: inset 0 2px 8px rgba(26, 16, 6, 0.04);
+}
+
+.auth-signed-in {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 1rem 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--panel-rule, rgba(26, 16, 6, 0.28)) 50%, transparent);
+  margin-bottom: 1.6rem;
+  position: relative;
+}
+
+.auth-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 0.6rem 0.2rem;
+  color: var(--panel-ink-2, #261b14);
+  font-size: var(--setup-fs-body);
+  font-variant: small-caps;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  opacity: 0.65;
+}
+
+.auth-tab:hover {
+  opacity: 1;
+  color: var(--panel-ink, #1a1006);
+}
+
+.auth-tab[aria-selected="true"] {
+  opacity: 1;
+  color: var(--panel-oxblood, #5c2119);
+  -webkit-text-stroke: 0.4px var(--panel-oxblood, #5c2119);
+  paint-order: stroke fill;
+}
+
+.auth-tab::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%) scaleX(0);
+  width: 40%;
+  height: 2px;
+  background: var(--panel-oxblood, #5c2119);
+  transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1);
+  transform-origin: center;
+}
+
+.auth-tab[aria-selected="true"]::after {
+  transform: translateX(-50%) scaleX(1);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  gap: 0.35rem;
+}
+
+.auth-field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.auth-label {
+  color: var(--panel-ink-2, #261b14);
+  font-size: var(--setup-fs-micro);
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+  -webkit-text-stroke: 0.35px var(--panel-ink-2, #261b14);
+  paint-order: stroke fill;
+}
+
+.auth-toggle-password {
+  background: transparent;
+  border: none;
+  padding: 0 0.2rem;
+  color: var(--panel-ink-2, #261b14);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.auth-toggle-password:hover {
+  opacity: 1;
+  color: var(--panel-ink, #1a1006);
+}
+
+.auth-toggle-password:focus-visible {
+  outline: 2px solid var(--panel-oxblood, #5c2119);
+  border-radius: 2px;
+}
+
+.auth-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--panel-paper-hi, #dcc5af) 65%, transparent);
+  border: 1px solid color-mix(in srgb, var(--panel-brass, #76512f) 45%, transparent);
+  border-radius: 2px;
+  padding: 0.75rem 0.9rem;
+  color: var(--panel-ink, #1a1006);
+  font-size: var(--setup-fs-body);
+  transition: all 0.2s ease;
+  box-shadow: inset 0 1px 3px rgba(26, 16, 6, 0.06);
+}
+
+.auth-input:hover {
+  border-color: color-mix(in srgb, var(--panel-brass, #76512f) 80%, transparent);
+}
+
+.auth-input:focus {
+  outline: none;
+  background: var(--panel-paper-hi, #dcc5af);
+  border-color: var(--panel-oxblood, #5c2119);
+  box-shadow: 
+    inset 0 1px 3px rgba(26, 16, 6, 0.04),
+    0 0 0 3px color-mix(in srgb, var(--panel-oxblood, #5c2119) 15%, transparent);
+}
+
+.auth-input::placeholder {
+  color: rgba(26, 16, 6, 0.55);
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.85rem;
+  border-radius: 2px;
+  background: var(--panel-oxblood, #5c2119);
+  color: var(--panel-paper-hi, #dcc5af);
+  border: 1px solid color-mix(in srgb, var(--panel-brass, #76512f) 50%, var(--panel-oxblood, #5c2119));
+  box-shadow: 
+    0 4px 12px rgba(26, 16, 6, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  -webkit-text-stroke: 0.4px var(--panel-paper-hi, #dcc5af);
+  paint-order: stroke fill;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  position: relative;
+}
+
+.auth-submit:hover:not(:disabled),
+.auth-submit:focus-visible:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 
+    0 6px 16px rgba(26, 16, 6, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 0 3px color-mix(in srgb, var(--panel-brass, #76512f) 35%, transparent);
+  outline: none;
+}
+
+.auth-submit:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 
+    0 2px 6px rgba(26, 16, 6, 0.15),
+    inset 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.auth-submit:disabled {
+  opacity: 0.6;
+  filter: grayscale(0.3);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.auth-message-area {
+  min-height: 3.5rem; /* Reserve space so form doesn't jump */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin-top: 1rem;
+  text-align: left;
+}
+
+.auth-message {
+  display: flex;
+  align-items: center;
+  margin-top: 0 !important;
+  border-radius: 2px;
+  animation: message-fade-in 0.25s ease-out;
+}
+
+@keyframes message-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-message.success {
+  color: var(--panel-ink, #1a1006);
+  background: color-mix(in srgb, #4d684d 10%, color-mix(in srgb, var(--panel-paper-tint, #9e8769) 50%, transparent));
+  border: 1px solid color-mix(in srgb, #4d684d 25%, transparent);
+  border-left: 3px solid #4d684d;
+  padding: 0.6rem 0.8rem;
+  font-size: var(--setup-fs-body);
+  -webkit-text-stroke: 0.2px var(--panel-ink, #1a1006);
+  paint-order: stroke fill;
+}
+
+.error.auth-message {
+  background: color-mix(in srgb, var(--panel-oxblood, #5c2119) 8%, color-mix(in srgb, var(--panel-paper-tint, #9e8769) 50%, transparent));
+  border: 1px solid color-mix(in srgb, var(--panel-oxblood, #5c2119) 20%, transparent);
+  border-left: 3px solid var(--panel-oxblood, #5c2119);
+  padding: 0.6rem 0.8rem;
 }
 
 .game-error-modal {

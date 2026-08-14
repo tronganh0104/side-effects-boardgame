@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useAuthStore } from '../auth/authStore'
 import { FinishedScreen } from '../components/FinishedScreen'
 import { DecisionModal } from '../components/DecisionModal'
 import { GameBoard } from '../components/GameBoard'
@@ -15,6 +16,10 @@ export function App() {
   const [mode, setMode] = useState<'home' | 'local' | 'online'>('home')
   const store = useGameStore()
   const game = store.gameState
+
+  useEffect(() => {
+    void useAuthStore.getState().initialize()
+  }, [])
 
   // Local hot-seat trading: the same negotiation machine as online
   // (`createTradeSessionStore`, driven here by `localTradeDriver` instead of

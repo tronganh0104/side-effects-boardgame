@@ -1,4 +1,5 @@
 import { t } from '../i18n'
+import { AuthPanel } from './AuthPanel'
 import logo480 from '../assets/logo-480.webp'
 import logo900 from '../assets/logo-900.webp'
 
@@ -27,7 +28,10 @@ export function HomeScreen({ onLocal, onOnline }: HomeScreenProps) {
           alt=""
         />
         <p className="tagline">"Trị lành hay điên thêm?"</p>
-        <div className="divider" />
+        <AuthPanel />
+        <div className="divider" aria-hidden="true">
+          <span className="divider-ornament">♦</span>
+        </div>
         <div className="button-row">
           <button type="button" className="primary" onClick={onLocal}>
             {t('localGame')}
