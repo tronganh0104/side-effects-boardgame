@@ -5,8 +5,15 @@ import { InMemoryRoomRepository } from './persistence/inMemoryRoomRepository'
 import { SupabaseRoomRepository } from './persistence/supabaseRoomRepository'
 import { RoomService } from './rooms/roomService'
 import { registerSocketHandlers } from './socket/registerSocketHandlers'
+import {
+  createSupabaseTokenVerifier,
+  type AccessTokenVerifier,
+} from './auth/supabaseTokenVerifier'
 
-export function createGameServer(config: ServerConfig) {
+export function createGameServer(
+  config: ServerConfig,
+  dependencies: { authVerifier?: AccessTokenVerifier } = {},
+) {
   const httpServer = createServer((request, response) => {
     if (request.method === 'GET' && request.url === '/health') {
       response.writeHead(200, { 'content-type': 'application/json' })
@@ -26,7 +33,14 @@ export function createGameServer(config: ServerConfig) {
     ? new SupabaseRoomRepository(config.supabase)
     : new InMemoryRoomRepository()
   const rooms = new RoomService(repository)
-  registerSocketHandlers(io, rooms)
+  registerSocketHandlers(
+    io,
+    rooms,
+    dependencies.authVerifier ??
+      (config.supabase
+        ? createSupabaseTokenVerifier(config.supabase.url)
+        : undefined),
+  )
   httpServer.on('close', () => rooms.dispose())
   return {
     httpServer,

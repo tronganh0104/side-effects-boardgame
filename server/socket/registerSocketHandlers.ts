@@ -10,6 +10,8 @@ import { RoomService } from '../rooms/roomService'
 import type { Room } from '../rooms/types'
 import { createTradeGateway } from '../trade/tradeGateway'
 import { lockableCardId } from '../trade/lockedCardGuard'
+import { createSocketAuthMiddleware } from '../auth/socketAuth'
+import type { AccessTokenVerifier } from '../auth/supabaseTokenVerifier'
 
 interface Session {
   roomId: string
@@ -137,7 +139,12 @@ export function parseDecisionPayload(payload: unknown): {
   }
 }
 
-export function registerSocketHandlers(io: Server, rooms: RoomService): void {
+export function registerSocketHandlers(
+  io: Server,
+  rooms: RoomService,
+  authVerifier?: AccessTokenVerifier,
+): void {
+  io.use(createSocketAuthMiddleware(authVerifier))
   const sessions = new Map<string, Session>()
   const chat = createChatGateway({ io, rooms })
   const trade = createTradeGateway({ io, rooms })

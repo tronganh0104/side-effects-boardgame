@@ -4,6 +4,7 @@ import type { GameCommand } from '../../server/game/commands'
 import type { PlayerGameView } from '../../server/game/playerView'
 import type { TradeClosedPayload, TradeStatePayload } from '../game/trade/types'
 import { useTradeStore } from '../store/tradeStore'
+import { getAuthAccessToken } from '../auth/authStore'
 
 export const SESSION_KEY = 'side-effect.room-session'
 export const multiplayerServerUrl =
@@ -81,7 +82,14 @@ export function createMultiplayerClient(
   url: string,
   handlers: MultiplayerClientHandlers = {},
 ) {
-  const socket: Socket = io(url, { autoConnect: false })
+  const socket: Socket = io(url, {
+    autoConnect: false,
+    auth: (callback) => {
+      void getAuthAccessToken()
+        .then((accessToken) => callback(accessToken ? { accessToken } : {}))
+        .catch(() => callback({}))
+    },
+  })
   let resumePendingSocketId: string | undefined
   let resumeAttemptSocketId: string | undefined
   if (handlers.onRoomState) socket.on('room:state', handlers.onRoomState)

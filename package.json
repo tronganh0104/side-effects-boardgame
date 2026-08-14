@@ -15,7 +15,9 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "@vitejs/plugin-react": "latest",
+    "jose": "^6.2.8",
     "react": "latest",
     "react-dom": "latest",
     "socket.io": "^4.8.3",
