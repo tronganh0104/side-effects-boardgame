@@ -4,6 +4,34 @@ import { InMemoryRoomRepository } from '../persistence/inMemoryRoomRepository'
 import { deserializeRoom, serializeRoom } from '../persistence/serializer'
 import type { PersistedRoomSnapshot, RoomRepository } from '../persistence/types'
 import { RoomService } from '../rooms/roomService'
+import type { Clock, TimeoutScheduler } from '../rooms/roomService'
+
+class FakeTime implements Clock, TimeoutScheduler {
+  private readonly timers = new Map<number, { callback: () => void; dueAt: number }>()
+  private nextId = 1
+
+  constructor(public value: number) {}
+  now(): number { return this.value }
+  set(callback: () => void, delayMs: number): number {
+    const id = this.nextId++
+    this.timers.set(id, { callback, dueAt: this.value + delayMs })
+    return id
+  }
+  clear(handle: unknown): void { this.timers.delete(handle as number) }
+  get nextDueAt(): number | undefined {
+    const due = [...this.timers.values()].map((timer) => timer.dueAt)
+    return due.length > 0 ? Math.min(...due) : undefined
+  }
+  advanceTo(value: number): void {
+    this.value = value
+    while (true) {
+      const due = [...this.timers.entries()].find(([, timer]) => timer.dueAt <= value)
+      if (!due) return
+      this.timers.delete(due[0])
+      due[1].callback()
+    }
+  }
+}
 
 function startedService(repository = new InMemoryRoomRepository()) {
   const service = new RoomService(repository, () => undefined)
@@ -153,6 +181,82 @@ describe('room persistence', () => {
       })
       restoredService.dispose()
     }
+  })
+
+  it('migrates v3 disconnects once and preserves the v4 deadline across restarts', async () => {
+    const repository = new InMemoryRoomRepository()
+    const source = startedService(repository)
+    const disconnected = source.room.players[1]
+    source.service.markDisconnected(source.room.id, disconnected.id)
+    await source.service.flushPersistence(source.room.id)
+
+    const legacy = serializeRoom(source.room)
+    legacy.schemaVersion = 3
+    for (const player of legacy.room.players) delete player.graceExpiresAt
+    const legacyRepository: RoomRepository = {
+      save: async (snapshot) => repository.save(snapshot),
+      deleteRoom: async (roomId) => repository.deleteRoom(roomId),
+      loadActive: async () => [structuredClone(legacy)],
+    }
+    const firstTime = new FakeTime(10_000)
+    const first = new RoomService(legacyRepository, () => undefined, {
+      clock: firstTime,
+      scheduler: firstTime,
+    })
+    await first.restoreFromRepository()
+    const firstRoom = first.getRoom(source.room.id)!
+    const firstDeadline = firstRoom.players.map((player) => player.graceExpiresAt)
+    expect(firstDeadline).toEqual([40_000, 40_000])
+    await first.flushPersistence(source.room.id)
+
+    const persisted = (await repository.loadActive()).find((snapshot) => snapshot.room.id === source.room.id)!
+    expect(persisted.schemaVersion).toBe(4)
+    expect(persisted.room.players.map((player) => player.graceExpiresAt)).toEqual(firstDeadline)
+    first.dispose()
+
+    const secondTime = new FakeTime(15_000)
+    const second = new RoomService(repository, () => undefined, {
+      clock: secondTime,
+      scheduler: secondTime,
+    })
+    await second.restoreFromRepository()
+    expect(second.getRoom(source.room.id)!.players.map((player) => player.graceExpiresAt)).toEqual(firstDeadline)
+    expect(second.getRoom(source.room.id)!.players.every((player) => player.graceExpiresAt === 40_000)).toBe(true)
+    second.dispose()
+
+    const expiredTime = new FakeTime(40_000)
+    const expired = new RoomService(repository, () => undefined, {
+      clock: expiredTime,
+      scheduler: expiredTime,
+    })
+    await expired.restoreFromRepository()
+    expect(expired.getRoom(source.room.id)!.status).toBe('finished')
+    expect(expired.getRoom(source.room.id)!.pendingDecision).toBeUndefined()
+    expect(hasCardConservation(expired.getRoom(source.room.id)!.gameState!, 89)).toBe(true)
+    expired.dispose()
+  })
+
+  it('persists terminal 2P abandonment without an active lifecycle deadline', async () => {
+    const repository = new InMemoryRoomRepository()
+    const time = new FakeTime(1_000)
+    const service = new RoomService(repository, () => undefined, {
+      clock: time,
+      scheduler: time,
+    })
+    const { room, player: host } = service.createRoom('Ada')
+    const { player: ben } = service.joinRoom(room.id, 'Ben')
+    service.startRoom(room.id, host.id)
+    service.markDisconnected(room.id, ben.id)
+    time.advanceTo(31_000)
+    await service.flushPersistence(room.id)
+
+    const snapshot = repository.readRoom(room.id)!
+    expect(snapshot.status).toBe('finished')
+    expect(snapshot.players.every((player) => player.graceExpiresAt === undefined)).toBe(true)
+    expect(snapshot.pendingDecision).toBeUndefined()
+    expect(hasCardConservation(room.gameState!, 89)).toBe(true)
+    expect((await repository.loadActive()).some((candidate) => candidate.room.id === room.id)).toBe(false)
+    service.dispose()
   })
 
   it('serializes saves per room so an older async save cannot overwrite a newer one', async () => {

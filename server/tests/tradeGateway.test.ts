@@ -463,6 +463,48 @@ describe('trade gateway — teardown paths', () => {
     expect(gateway.isCardLocked('ada', 'card-ada-1')).toBe(false)
   })
 
+  it('cannot commit a delayed final confirm after disconnect closes a one-sided-confirmed trade', () => {
+    const room = createRoom()
+    const { io, emitted } = createFakeIo()
+    const commands: GameCommand[] = []
+    const gateway = createTradeGateway({
+      io,
+      rooms: createFakeRooms(room, (_roomId, _playerId, command) => {
+        commands.push(command)
+        throw new Error('A disconnected trade must not commit.')
+      }),
+    })
+    const failures: unknown[] = []
+    const ada = createFakeSocket('socket-ada')
+    const ben = createFakeSocket('socket-ben')
+    gateway.attach(ada.socket, () => ({ roomId: 'ROOM1', playerId: 'ada' }), (error) => failures.push(error))
+    gateway.attach(ben.socket, () => ({ roomId: 'ROOM1', playerId: 'ben' }), (error) => failures.push(error))
+    const adaCard = room.gameState!.players.find((player) => player.id === 'ada')!.hand[0].instanceId
+    const benCard = room.gameState!.players.find((player) => player.id === 'ben')!.hand[0].instanceId
+
+    ada.trigger('trade:invite', { targetPlayerId: 'ben' })
+    ben.trigger('trade:accept')
+    ada.trigger('trade:place', { cardInstanceId: adaCard })
+    ben.trigger('trade:place', { cardInstanceId: benCard })
+    ada.trigger('trade:confirm')
+    const before = structuredClone(room.gameState)
+
+    gateway.release('socket-ada')
+    ben.trigger('trade:confirm')
+    ben.trigger('trade:place', { cardInstanceId: 'stale-card' })
+    ben.trigger('trade:clear')
+
+    expect(commands).toEqual([])
+    expect(room.gameState).toEqual(before)
+    expect(failures).toHaveLength(3)
+    expect(emitted).toEqual(expect.arrayContaining([
+      { target: 'socket-ada', event: 'trade:closed', payload: { reason: 'disconnected' } },
+      { target: 'socket-ben', event: 'trade:closed', payload: { reason: 'disconnected' } },
+    ]))
+    expect(gateway.isCardLocked('ada', adaCard)).toBe(false)
+    expect(gateway.isCardLocked('ben', benCard)).toBe(false)
+  })
+
   it('closeRoomSessions closes and frees every session for that room', () => {
     const room = createRoom()
     const { io, emitted } = createFakeIo()

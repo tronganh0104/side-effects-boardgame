@@ -6,6 +6,7 @@ export interface RoomPlayer {
   displayName: string
   connected: boolean
   socketId?: string
+  graceExpiresAt?: number
 }
 
 export interface Room {

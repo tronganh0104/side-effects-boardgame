@@ -134,6 +134,81 @@ function beginDecision(
 }
 
 describe('authoritative Tremors timeout', () => {
+  it('cleans up a pending Anxiety when the chooser abandons during grace', () => {
+    const state = startedRoom()
+    const prepared = beginDecision(state.service, state.room.id, 'anxiety')
+    const before = structuredClone(state.room.gameState!)
+    const opponent = prepared.target.id
+
+    state.service.markDisconnected(state.room.id, prepared.attacker.id)
+    expect(state.room.pendingDecision?.kind).toBe('anxiety')
+    const publicView = createPlayerView(state.room.gameState!, prepared.attacker.id, state.room.pendingDecision)
+    expect(JSON.stringify(publicView.pendingDecision)).not.toContain(prepared.target.hand[0].instanceId)
+    state.time.advanceTo(31_000)
+
+    expect(state.room.status).toBe('finished')
+    expect(state.room.gameState?.winnerPlayerId).toBe(opponent)
+    expect(state.room.pendingDecision).toBeUndefined()
+    expect(state.room.gameState).not.toEqual(before)
+    expect(state.room.gameState?.players.find((player) => player.id === opponent)?.hand).toEqual(
+      before.players.find((player) => player.id === opponent)?.hand,
+    )
+    expect(hasCardConservation(state.room.gameState!, 89)).toBe(true)
+  })
+
+  it('applies immediate 2P leave cleanup for a pending Anxiety chooser', () => {
+    const state = startedRoom()
+    const prepared = beginDecision(state.service, state.room.id, 'anxiety')
+
+    state.service.leaveRoom(state.room.id, prepared.attacker.id)
+
+    expect(state.room.status).toBe('finished')
+    expect(state.room.gameState?.winnerPlayerId).toBe(prepared.target.id)
+    expect(state.room.pendingDecision).toBeUndefined()
+    expect(state.time.pendingCount).toBe(0)
+    expect(hasCardConservation(state.room.gameState!, 89)).toBe(true)
+  })
+
+  it('resolves Tremors before explicit target leave and keeps the finished state stable', () => {
+    const state = startedRoom()
+    const prepared = beginDecision(state.service, state.room.id, 'tremors')
+    const handBefore = prepared.target.hand.length
+
+    state.service.leaveRoom(state.room.id, prepared.target.id)
+    const afterLeave = structuredClone(state.room.gameState!)
+
+    expect(state.room.status).toBe('finished')
+    expect(state.room.gameState?.winnerPlayerId).toBe(prepared.attacker.id)
+    expect(state.room.pendingDecision).toBeUndefined()
+    expect(prepared.target.hand).toHaveLength(handBefore)
+    expect(state.room.gameState?.players.find((player) => player.id === prepared.target.id)?.hand).toHaveLength(0)
+    expect(state.time.pendingCount).toBe(0)
+    expect(hasCardConservation(state.room.gameState!, 89)).toBe(true)
+
+    state.time.advanceTo(10_000)
+    expect(state.room.gameState).toEqual(afterLeave)
+  })
+
+  it('resolves Tremors at three seconds while disconnected grace remains active', () => {
+    const state = startedRoom()
+    const prepared = beginDecision(state.service, state.room.id, 'tremors')
+    state.service.markDisconnected(state.room.id, prepared.target.id)
+    const graceDeadline = state.room.players.find((player) => player.id === prepared.target.id)?.graceExpiresAt
+
+    state.time.advanceTo(4_000)
+    expect(state.room.status).toBe('playing')
+    expect(state.room.pendingDecision).toBeUndefined()
+    expect(state.room.gameState?.players.find((player) => player.id === prepared.target.id)?.hand).toHaveLength(0)
+    expect(graceDeadline).toBe(31_000)
+    expect(state.room.players.find((player) => player.id === prepared.target.id)?.graceExpiresAt).toBe(31_000)
+    expect(hasCardConservation(state.room.gameState!, 89)).toBe(true)
+
+    const targetSession = prepared.target.id === state.room.players[0].id ? state.hostSession : state.benSession
+    state.service.resumeSession(state.room.id, prepared.target.id, targetSession.sessionToken, 'replacement')
+    expect(state.room.status).toBe('playing')
+    expect(state.room.players.find((player) => player.id === prepared.target.id)).toMatchObject({ connected: true })
+    expect(hasCardConservation(state.room.gameState!, 89)).toBe(true)
+  })
   it('creates one three-second deadline only for Tremors', () => {
     const tremors = startedRoom()
     const prepared = beginDecision(tremors.service, tremors.room.id)

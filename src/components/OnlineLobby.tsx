@@ -13,6 +13,10 @@ import {
 import type { PlayerGameView } from '../../server/game/playerView'
 import { localizeError, t } from '../i18n'
 import { useChatStore } from '../store/chatStore'
+import {
+  exitFinishedOnlineGame,
+  resetMultiplayerRoomUi,
+} from '../multiplayer/recoveryCleanup'
 
 interface OnlineLobbyProps {
   onBack: () => void
@@ -28,9 +32,19 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
   const [gameLog, setGameLog] = useState<string[]>([])
   const [connectionState, setConnectionState] =
     useState<ConnectionState>('connecting')
+  const [now, setNow] = useState(() => Date.now())
   const clientRef = useRef<ReturnType<typeof createMultiplayerClient> | null>(
     null,
   )
+
+  const resetRoomUi = () => {
+    resetMultiplayerRoomUi({
+      clearRoom: () => setRoom(undefined),
+      clearGame: () => setGame(undefined),
+      clearSession: () => setSession(undefined),
+      clearGameLog: () => setGameLog([]),
+    })
+  }
 
   useEffect(() => {
     const client = createMultiplayerClient(
@@ -41,14 +55,15 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
         onError: setError,
         onGameLog: setGameLog,
         onConnectionState: setConnectionState,
-        onSessionRestored: setSession,
+        onSessionRestored: (restoredSession) => {
+          setSession(restoredSession)
+          setError(undefined)
+        },
         onChatMessage: (message) => useChatStore.getState().append(message),
         onRoomLeft: () => {
-          setRoom(undefined)
-          setGame(undefined)
-          setSession(undefined)
-          useChatStore.getState().reset()
+          resetRoomUi()
         },
+        onRecoveryFailed: resetRoomUi,
       },
     )
     clientRef.current = client
@@ -57,6 +72,12 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
       client.disconnect()
     }
   }, [])
+
+  useEffect(() => {
+    if (!game || !room?.players.some((player) => player.graceExpiresAt !== undefined)) return
+    const timer = window.setInterval(() => setNow(Date.now()), 250)
+    return () => window.clearInterval(timer)
+  }, [game, room])
 
   const isHost = room?.hostPlayerId === session?.playerId
   const allConnected =
@@ -76,7 +97,17 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
     return (
       <FinishedScreen
         winnerName={winner?.name ?? t('winner')}
-        onNewGame={onBack}
+        onNewGame={() =>
+          exitFinishedOnlineGame(
+            {
+              clearRoom: () => setRoom(undefined),
+              clearGame: () => setGame(undefined),
+              clearSession: () => setSession(undefined),
+              clearGameLog: () => setGameLog([]),
+            },
+            onBack,
+          )
+        }
         actionLabel={t('back')}
       />
     )
@@ -87,17 +118,20 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
     const currentRoomPlayer = room?.players.find(
       (player) => player.id === game.currentPlayerId,
     )
+    const disconnectedRoomPlayer = room?.players.find((player) => !player.connected)
     return (
       <main className="online-game">
         <p className="connection-status">
-          {currentRoomPlayer?.connected === false
-            ? `${currentRoomPlayer.displayName} — ${t('waitingForReconnect')}`
+          {disconnectedRoomPlayer
+            ? `${disconnectedRoomPlayer.displayName} — ${disconnectedRoomPlayer.graceExpiresAt !== undefined && disconnectedRoomPlayer.graceExpiresAt > now
+              ? t('waitingForReconnectCountdown', { seconds: Math.ceil((disconnectedRoomPlayer.graceExpiresAt - now) / 1000) })
+              : disconnectedRoomPlayer.graceExpiresAt !== undefined ? t('disconnectProcessing') : t('waitingForReconnect')}`
             : game.currentPlayerId === viewerId
               ? t('yourTurn')
               : t('waitingFor', { player: currentRoomPlayer?.displayName ?? t('currentPlayer') })}
         </p>
         {connectionState !== 'connected' && (
-          <p className="error">{t('reconnecting')}</p>
+          <p className="error">{connectionState === 'resuming' ? t('restoringGame') : t('reconnecting')}</p>
         )}
         {game.pendingDecision && (
           <DecisionModal
@@ -123,6 +157,10 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
             clientRef.current?.sendCommand({ type: 'endTurn' })
           }}
           onForfeit={() => clientRef.current?.sendCommand({ type: 'forfeit' })}
+          onLeave={() => {
+            if (game.players.length !== 2 || window.confirm(`${t('leaveActiveGameTitle')}\n\n${t('leaveActiveGameBody')}`))
+              clientRef.current?.leaveRoom()
+          }}
           onClearError={() => setError(undefined)}
           onDiscard={(cardInstanceId) => {
             setError(undefined)
@@ -205,7 +243,11 @@ export function OnlineLobby({ onBack }: OnlineLobbyProps) {
 
         {connectionState !== 'connected' && (
           <p className="error" style={{ marginBottom: '1rem' }}>
-            {connectionState === 'unavailable'
+            {connectionState === 'failed'
+              ? t('recoveryFailed')
+              : connectionState === 'resuming'
+                ? t('restoringGame')
+              : connectionState === 'unavailable'
               ? t('unavailable')
               : connectionState === 'connecting' ? t('connecting') : t('reconnecting')}
           </p>

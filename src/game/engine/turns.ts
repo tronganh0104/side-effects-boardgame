@@ -339,6 +339,16 @@ export function forfeitGame(
 ): GameState {
   assertGameIsPlaying(game)
   assertCurrentPlayer(game, playerId)
+  return applyTwoPlayerForfeitCore(game, playerId, options)
+}
+
+/** Applies the shared terminal 2-player abandonment/forfeit semantics. */
+export function applyTwoPlayerForfeitCore(
+  game: GameState,
+  playerId: string,
+  options: TurnCommandOptions = {},
+): GameState {
+  assertGameIsPlaying(game)
   if (game.players.length !== 2) {
     throw new Error('Forfeit is currently supported only in two-player games.')
   }

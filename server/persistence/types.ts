@@ -1,6 +1,6 @@
 import type { Room } from '../rooms/types'
 
-export const ROOM_SNAPSHOT_SCHEMA_VERSION = 3
+export const ROOM_SNAPSHOT_SCHEMA_VERSION = 4
 
 export interface PersistedRoomSnapshot {
   schemaVersion: number

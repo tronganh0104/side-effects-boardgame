@@ -9,7 +9,14 @@ import {
 import { createGame } from '../../src/game/engine/setup'
 import { playTherapy } from '../../src/game/engine/therapy'
 import { tradeCards } from '../../src/game/engine/trading'
-import { discardCard, discardManual, drawForTurn, endTurn, forfeitGame } from '../../src/game/engine/turns'
+import {
+  applyTwoPlayerForfeitCore,
+  discardCard,
+  discardManual,
+  drawForTurn,
+  endTurn,
+  forfeitGame,
+} from '../../src/game/engine/turns'
 import type { GameState } from '../../src/game/engine/types'
 import { describeCommand } from '../../src/game/log/describeCommand'
 import type { GameCommand } from '../game/commands'
@@ -45,6 +52,7 @@ export interface RoomServiceDependencies {
 }
 
 const TREMORS_TIMEOUT_MS = 3_000
+const DISCONNECT_GRACE_MS = 30_000
 const systemClock: Clock = { now: () => Date.now() }
 const systemScheduler: TimeoutScheduler = {
   set: (callback, delayMs) => setTimeout(callback, delayMs),
@@ -57,6 +65,10 @@ export class RoomService {
   private readonly decisionTimers = new Map<
     string,
     { decisionId: string; handle: unknown }
+  >()
+  private readonly disconnectTimers = new Map<
+    string,
+    { deadline: number; handle: unknown }
   >()
   private readonly mutationListeners = new Set<(room: Room) => void>()
   private readonly clock: Clock
@@ -78,6 +90,7 @@ export class RoomService {
 
   dispose(): void {
     for (const roomId of this.decisionTimers.keys()) this.clearDecisionTimer(roomId)
+    for (const key of this.disconnectTimers.keys()) this.clearDisconnectTimer(key)
     this.mutationListeners.clear()
   }
 
@@ -133,8 +146,11 @@ export class RoomService {
 
   leaveRoom(roomId: string, playerId: string): Room | undefined {
     const room = this.requireRoom(roomId)
-    if (room.status !== 'lobby')
-      throw new Error('Leaving an active game is not supported yet.')
+    if (room.status === 'playing') {
+      if (room.players.length !== 2) throw new Error('Leaving an active game is not supported yet.')
+      return this.abandonTwoPlayer(room, playerId)
+    }
+    if (room.status !== 'lobby') throw new Error('This room has already finished.')
     const remainingPlayers = room.players.filter(
       (player) => player.id !== playerId,
     )
@@ -217,6 +233,7 @@ export class RoomService {
     if (nextGame.status === 'finished') {
       room.status = 'finished'
       this.clearDecisionTimer(room.id)
+      this.clearRoomDisconnectTimers(room.id)
     }
     this.persistRoom(room)
     return nextGame
@@ -295,9 +312,23 @@ export class RoomService {
     const tokenHash = room.sessionTokenHashes[playerId]
     if (!player || !tokenHash || !matchesSessionToken(sessionToken, tokenHash))
       throw new Error('Unable to restore session.')
+    if (
+      room.status === 'playing' &&
+      room.players.length === 2 &&
+      player.graceExpiresAt !== undefined &&
+      this.clock.now() >= player.graceExpiresAt
+    ) {
+      this.abandonTwoPlayer(room, playerId)
+      throw new Error('Unable to restore session.')
+    }
     player.connected = true
     player.socketId = socketId
+    const previousDeadline = player.graceExpiresAt
+    delete player.graceExpiresAt
+    if (previousDeadline !== undefined) this.clearDisconnectTimer(room.id, player.id)
+    room.gameLog = [...room.gameLog, `${player.displayName} đã kết nối lại.`].slice(-30)
     this.persistRoom(room)
+    this.notifyMutation(room)
     return room
   }
 
@@ -306,9 +337,17 @@ export class RoomService {
     const player = room.players.find((candidate) => candidate.id === playerId)
     if (!player) throw new Error('Player is not in this room.')
     if (socketId && player.socketId !== socketId) return room
+    if (!player.connected) return room
     player.connected = false
     player.socketId = undefined
+    delete player.graceExpiresAt
+    if (room.status === 'playing' && room.players.length === 2) {
+      player.graceExpiresAt = this.clock.now() + DISCONNECT_GRACE_MS
+      this.scheduleDisconnect(room, player)
+      room.gameLog = [...room.gameLog, `${player.displayName} mất kết nối.`].slice(-30)
+    }
     this.persistRoom(room)
+    this.notifyMutation(room)
     return room
   }
 
@@ -320,6 +359,18 @@ export class RoomService {
         if (this.rooms.has(room.id))
           throw new Error(`Duplicate persisted room code: ${room.id}`)
         this.rooms.set(room.id, room)
+        if (snapshot.schemaVersion === 3 && room.status === 'playing') {
+          for (const player of room.players)
+            if (!player.connected) player.graceExpiresAt = this.clock.now() + DISCONNECT_GRACE_MS
+          this.persistRoom(room)
+        }
+        for (const player of room.players) {
+          if (room.status === 'playing' && room.players.length === 2 && player.graceExpiresAt !== undefined) {
+            if (this.clock.now() >= player.graceExpiresAt)
+              this.abandonTwoPlayer(room, player.id)
+            else this.scheduleDisconnect(room, player)
+          }
+        }
         if (room.pendingDecision?.kind === 'tremors') {
           if (this.clock.now() >= room.pendingDecision.expiresAt)
             this.resolveTremorsTimeout(room, room.pendingDecision.id)
@@ -552,6 +603,64 @@ export class RoomService {
           partnerPlayerId: command.partnerPlayerId,
           partnerCardId: command.partnerCardId,
         })
+    }
+  }
+
+  private notifyMutation(room: Room): void {
+    for (const listener of this.mutationListeners) listener(room)
+  }
+
+  private abandonTwoPlayer(room: Room, playerId: string): Room {
+    if (!room.gameState || room.players.length !== 2) throw new Error('This room is not an active two-player game.')
+    const player = room.players.find((candidate) => candidate.id === playerId)
+    if (!player) throw new Error('Player is not in this room.')
+    this.clearDisconnectTimer(room.id, playerId)
+    this.clearRoomDisconnectTimers(room.id)
+    if (room.pendingDecision?.kind === 'tremors')
+      this.resolveTremorsTimeout(room, room.pendingDecision.id)
+    if (room.pendingDecision) {
+      this.clearDecisionTimer(room.id)
+      room.pendingDecision = undefined
+    }
+    room.gameState = applyTwoPlayerForfeitCore(room.gameState, playerId)
+    room.status = 'finished'
+    room.gameLog = [...room.gameLog, `${player.displayName} đã rời ván.`].slice(-30)
+    for (const candidate of room.players) delete candidate.graceExpiresAt
+    this.persistRoom(room)
+    this.notifyMutation(room)
+    return room
+  }
+
+  private scheduleDisconnect(room: Room, player: RoomPlayer): void {
+    if (room.status !== 'playing' || room.players.length !== 2 || player.graceExpiresAt === undefined) return
+    const key = `${room.id}:${player.id}`
+    this.clearDisconnectTimer(key)
+    const deadline = player.graceExpiresAt
+    const handle = this.scheduler.set(() => {
+      const currentRoom = this.rooms.get(room.id)
+      const currentPlayer = currentRoom?.players.find((candidate) => candidate.id === player.id)
+      if (!currentRoom || !currentPlayer || currentPlayer.connected || currentPlayer.graceExpiresAt !== deadline) return
+      if (this.clock.now() < deadline) {
+        this.scheduleDisconnect(currentRoom, currentPlayer)
+        return
+      }
+      try { this.abandonTwoPlayer(currentRoom, currentPlayer.id) }
+      catch { this.logError('Disconnect abandonment resolution failed; the room remains active.') }
+    }, Math.max(0, deadline - this.clock.now()))
+    this.disconnectTimers.set(key, { deadline, handle })
+  }
+
+  private clearDisconnectTimer(roomIdOrKey: string, playerId?: string): void {
+    const key = playerId ? `${roomIdOrKey}:${playerId}` : roomIdOrKey
+    const timer = this.disconnectTimers.get(key)
+    if (!timer) return
+    this.scheduler.clear(timer.handle)
+    this.disconnectTimers.delete(key)
+  }
+
+  private clearRoomDisconnectTimers(roomId: string): void {
+    for (const key of this.disconnectTimers.keys()) {
+      if (key.startsWith(`${roomId}:`)) this.clearDisconnectTimer(key)
     }
   }
 }

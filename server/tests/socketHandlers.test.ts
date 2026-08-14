@@ -146,4 +146,53 @@ describe('socket command boundary', () => {
       server.rooms.isActiveSocket(session.roomId, session.playerId, legitimate.id),
     ).toBe(true)
   })
+
+  it('accepts active 2P leave and rejects active 3P leave', async () => {
+    const server = createGameServer({ port: 0, clientOrigins: ['http://localhost:5173'] })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.httpServer.listen(0, '127.0.0.1', resolve))
+
+    const ada = await connect(server)
+    const adaSessionWait = once<{ roomId: string; playerId: string; sessionToken: string }>(ada, 'session:restored')
+    ada.emit('room:create', { displayName: 'Ada' })
+    const adaSession = await adaSessionWait
+    const ben = await connect(server)
+    const benSessionWait = once<{ roomId: string; playerId: string; sessionToken: string }>(ben, 'session:restored')
+    ben.emit('room:join', { roomId: adaSession.roomId, displayName: 'Ben' })
+    await benSessionWait
+    ada.emit('room:start')
+    await once(ada, 'game:state')
+    await once(ben, 'game:state')
+    const finished = once<{ status: string; players: unknown[] }>(ben, 'room:state')
+    const left = once<void>(ada, 'room:left')
+    ada.emit('room:leave')
+    await left
+    expect((await finished).status).toBe('finished')
+    expect(server.rooms.getRoom(adaSession.roomId)?.gameState?.winnerPlayerId).toBe(
+      server.rooms.getRoom(adaSession.roomId)?.players.find((player) => player.id !== adaSession.playerId)?.id,
+    )
+
+    const three = createGameServer({ port: 0, clientOrigins: ['http://localhost:5173'] })
+    servers.push(three)
+    await new Promise<void>((resolve) => three.httpServer.listen(0, '127.0.0.1', resolve))
+    const first = await connect(three)
+    const firstSessionWait = once<{ roomId: string; playerId: string; sessionToken: string }>(first, 'session:restored')
+    first.emit('room:create', { displayName: 'A' })
+    const firstSession = await firstSessionWait
+    const extraSockets: Socket[] = []
+    for (const name of ['B', 'C']) {
+      const socket = await connect(three)
+      extraSockets.push(socket)
+      const sessionWait = once<unknown>(socket, 'session:restored')
+      socket.emit('room:join', { roomId: firstSession.roomId, displayName: name })
+      await sessionWait
+    }
+    const started = once(first, 'game:state')
+    first.emit('room:start')
+    await started
+    const rejected = once<string>(first, 'game:error')
+    first.emit('room:leave')
+    await expect(rejected).resolves.toContain('not supported')
+    expect(three.rooms.getRoom(firstSession.roomId)?.status).toBe('playing')
+  })
 })
