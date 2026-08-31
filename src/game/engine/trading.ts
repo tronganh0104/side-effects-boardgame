@@ -7,7 +7,7 @@ export interface TradeCardsParams {
   partnerCardId: string
 }
 
-/** Swaps one hand card each between two players, spending the initiator's once-per-turn trade quota. */
+/** Swaps one hand card each between two players. */
 export function tradeCards(game: GameState, params: TradeCardsParams): GameState {
   const { initiatorPlayerId, initiatorCardId, partnerPlayerId, partnerCardId } = params
 
@@ -30,10 +30,6 @@ export function tradeCards(game: GameState, params: TradeCardsParams): GameState
   if (game.turn.phase === 'draw') {
     throw new Error('Trading is not allowed until the running turn has drawn.')
   }
-  if (initiator.tradeUsedThisTurn) {
-    throw new Error('The initiating player has already traded this turn.')
-  }
-
   const initiatorCardIndex = initiator.hand.findIndex(
     (card) => card.instanceId === initiatorCardId,
   )
@@ -59,7 +55,6 @@ export function tradeCards(game: GameState, params: TradeCardsParams): GameState
           hand: player.hand.map((card, index) =>
             index === initiatorCardIndex ? partnerCard : card,
           ),
-          tradeUsedThisTurn: true,
         }
       }
       if (player.id === partner.id) {

@@ -93,8 +93,7 @@ interface GameBoardProps {
   onCancelTrade?: () => void
   /** Per-player reason a trade invite would be rejected, supplied by the
    *  online wiring layer (room connectivity / other active sessions). Absent
-   *  or missing entries are treated as eligible; `tradeUsedThisTurn` is
-   *  always known locally from `game.players` and needs no entry here. */
+   *  or missing entries are treated as eligible. */
   tradeIneligiblePlayers?: Record<string, 'busy' | 'disconnected'>
   onDiscard: (cardId: string) => void
   onManualDiscard: (cardId: string) => void
@@ -335,10 +334,8 @@ export function GameBoard(props: GameBoardProps) {
   const tradePartners: TradePartnerOption[] = useMemo(
     () =>
       opponents.map((opponent) => {
-        const usedTurn = 'tradeUsedThisTurn' in opponent && opponent.tradeUsedThisTurn
-        const reason = usedTurn
-          ? 'đã đổi lượt này'
-          : props.tradeIneligiblePlayers?.[opponent.id] === 'busy'
+        const reason =
+          props.tradeIneligiblePlayers?.[opponent.id] === 'busy'
             ? 'đang bận'
             : props.tradeIneligiblePlayers?.[opponent.id] === 'disconnected'
               ? 'mất kết nối'

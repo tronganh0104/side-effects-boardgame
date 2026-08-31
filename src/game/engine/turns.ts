@@ -79,14 +79,10 @@ function beginTurn(
             ...player.effects,
             skipDrawTurns: player.effects.skipDrawTurns - 1,
           },
-          tradeUsedThisTurn: false,
         })
         return { ...nextGame, turn: { ...nextGame.turn, phase: 'play' } }
       }
-      return updatePlayer(nextGame, nextGame.currentPlayerIndex, {
-        ...player,
-        tradeUsedThisTurn: false,
-      })
+      return nextGame
     }
 
     nextGame = updatePlayer(nextGame, nextGame.currentPlayerIndex, {

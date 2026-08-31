@@ -15,6 +15,8 @@ The format follows Keep a Changelog and uses calendar dates because this reposit
 ### Changed
 
 - The online lobby now pre-fills and auto-joins from a room code in the URL when possible, and clears the URL when leaving or recovery fails.
+- Trading no longer has a once-per-turn cap, so players can exchange cards repeatedly within the same turn.
+- Trade state was simplified by removing the per-turn trade flag from player views, persistence, and engine state.
 
 ## [Unreleased]
 

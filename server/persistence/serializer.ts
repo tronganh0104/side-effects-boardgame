@@ -53,11 +53,11 @@ export function deserializeRoom(snapshot: PersistedRoomSnapshot): Room {
     gameState: room.gameState
       ? {
           ...room.gameState,
-          players: room.gameState.players.map((player) => ({
-            ...player,
-            // Rows persisted before trading was added lack this field.
-            tradeUsedThisTurn: player.tradeUsedThisTurn ?? false,
-          })),
+          players: room.gameState.players.map((player) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { tradeUsedThisTurn: _dropped, ...rest } = player as typeof player & { tradeUsedThisTurn?: unknown }
+            return rest
+          }),
         }
       : room.gameState,
   }

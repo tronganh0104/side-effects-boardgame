@@ -101,48 +101,49 @@ Explore the current documentation set:
 
 ### Prerequisites
 
-* Node.js 18+ 
+* Node.js 18+
 * npm
 
-### 1. Clone the Repository
+### Clone the Repository
 
 ```sh
 git clone https://github.com/tronganh0104/side-effects-boardgame.git
-```
-
-### 2. Open the Project Folder
-
-```sh
 cd side-effects-boardgame
 ```
 
-### 3. Install Dependencies
+### Install Dependencies
 
-```bash
+```sh
 npm install
 ```
 
-### 4. Run the Development Client
+### Run the Development Client
 
-```bash
+```sh
 npm run dev
 ```
 
-### 5. Run the Development Server
+### Run the Development Server
 
-```bash
+In a separate terminal:
+
+```sh
 npm run dev:server
 ```
 
-### 6. Build for Production
+### Build for Production
 
-```bash
+To create a production build:
+
+```sh
 npm run build
 ```
 
-### 7. Run the Production Server
+### Run the Production Server
 
-```bash
+After building the project:
+
+```sh
 npm run server:start
 ```
 

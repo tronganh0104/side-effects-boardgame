@@ -25,7 +25,6 @@ export interface PlayerState {
   hand: CardInstance[]
   psyche: PsycheState
   effects: TemporaryEffectsState
-  tradeUsedThisTurn: boolean
 }
 
 export interface TurnState {
