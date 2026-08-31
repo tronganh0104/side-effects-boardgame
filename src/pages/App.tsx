@@ -12,8 +12,17 @@ import { useTradeStore } from '../store/tradeStore'
 import { exitFinishedLocalGame } from '../multiplayer/recoveryCleanup'
 import '../styles/index.css'
 
+/** Extract a 6-char room code from the URL path, e.g. "/V2RGJF" → "V2RGJF". */
+function getRoomCodeFromPath(): string | undefined {
+  const match = window.location.pathname.match(/^\/([A-Z0-9]{6})$/i)
+  return match ? match[1].toUpperCase() : undefined
+}
+
 export function App() {
-  const [mode, setMode] = useState<'home' | 'local' | 'online'>('home')
+  const initialRoomCode = getRoomCodeFromPath()
+  const [mode, setMode] = useState<'home' | 'local' | 'online'>(
+    initialRoomCode ? 'online' : 'home',
+  )
   const [recoverOnOnline, setRecoverOnOnline] = useState(false)
   const store = useGameStore()
   const game = store.gameState
@@ -47,10 +56,15 @@ export function App() {
         }}
       />
     )
-  if (mode === 'online') return <OnlineLobby onBack={() => {
-    setRecoverOnOnline(false)
-    setMode('home')
-  }} recoverOnMount={recoverOnOnline} />
+  if (mode === 'online') return <OnlineLobby
+    onBack={() => {
+      setRecoverOnOnline(false)
+      setMode('home')
+      history.pushState(null, '', '/')
+    }}
+    recoverOnMount={recoverOnOnline}
+    initialRoomCode={initialRoomCode}
+  />
   if (!game)
     return <SetupScreen error={store.error} onStart={store.createLocalGame} />
   if (game.status === 'finished') {

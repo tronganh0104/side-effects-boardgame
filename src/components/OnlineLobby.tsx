@@ -22,11 +22,19 @@ import {
 interface OnlineLobbyProps {
   onBack: () => void
   recoverOnMount?: boolean
+  initialRoomCode?: string
 }
 
-export function OnlineLobby({ onBack, recoverOnMount = false }: OnlineLobbyProps) {
+/** Push a room-code path so the URL becomes /ABCDEF, or / when leaving. */
+function pushRoomUrl(roomId: string | undefined): void {
+  const target = roomId ? `/${roomId}` : '/'
+  if (window.location.pathname !== target)
+    history.pushState(null, '', target)
+}
+
+export function OnlineLobby({ onBack, recoverOnMount = false, initialRoomCode }: OnlineLobbyProps) {
   const [displayName, setDisplayName] = useState('')
-  const [roomCode, setRoomCode] = useState('')
+  const [roomCode, setRoomCode] = useState(initialRoomCode ?? '')
   const [room, setRoom] = useState<RoomView>()
   const [session, setSession] = useState<MultiplayerSession>()
   const [game, setGame] = useState<PlayerGameView>()
@@ -36,10 +44,16 @@ export function OnlineLobby({ onBack, recoverOnMount = false }: OnlineLobbyProps
     useState<ConnectionState>('connecting')
   const [accountRecovery, setAccountRecovery] = useState<AccountRecoveryView>({ status: 'none' })
   const [now, setNow] = useState(() => Date.now())
+  const [linkCopied, setLinkCopied] = useState(false)
   const clientRef = useRef<ReturnType<typeof createMultiplayerClient> | null>(
     null,
   )
   const recoveryClaimedRef = useRef(false)
+
+  const leaveAndGoHome = () => {
+    pushRoomUrl(undefined)
+    onBack()
+  }
 
   const resetRoomUi = () => {
     resetMultiplayerRoomUi({
@@ -54,7 +68,10 @@ export function OnlineLobby({ onBack, recoverOnMount = false }: OnlineLobbyProps
     const client = createMultiplayerClient(
       multiplayerServerUrl,
       {
-        onRoomState: setRoom,
+        onRoomState: (r) => {
+          setRoom(r)
+          pushRoomUrl(r.id)
+        },
         onGameState: setGame,
         onError: setError,
         onGameLog: setGameLog,
@@ -62,15 +79,23 @@ export function OnlineLobby({ onBack, recoverOnMount = false }: OnlineLobbyProps
         onSessionRestored: (restoredSession) => {
           setSession(restoredSession)
           setError(undefined)
+          pushRoomUrl(restoredSession.roomId)
         },
         onChatMessage: (message) => useChatStore.getState().append(message),
         onRoomLeft: () => {
           resetRoomUi()
+          // Go all the way back to home so the user isn't stuck on the lobby screen.
+          leaveAndGoHome()
         },
-        onRecoveryFailed: resetRoomUi,
+        onRecoveryFailed: () => {
+          resetRoomUi()
+          // Clear the URL code so a refresh doesn't re-attempt a dead session.
+          pushRoomUrl(undefined)
+        },
         onAccountRecovery: setAccountRecovery,
         onSessionReplaced: () => {
           resetRoomUi()
+          pushRoomUrl(undefined)
           setAccountRecovery({ status: 'none' })
           setError(t('accountSessionReplaced'))
         },
@@ -81,7 +106,29 @@ export function OnlineLobby({ onBack, recoverOnMount = false }: OnlineLobbyProps
     return () => {
       client.disconnect()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // If the URL had a room code when the page loaded, try to join it as soon as
+  // the socket connects (connection state flips to 'connected').
+  const autoJoinAttemptedRef = useRef(false)
+  useEffect(() => {
+    if (
+      !initialRoomCode ||
+      autoJoinAttemptedRef.current ||
+      connectionState !== 'connected' ||
+      // Don't auto-join if account recovery is already in progress.
+      accountRecovery.status !== 'none'
+    ) return
+    autoJoinAttemptedRef.current = true
+    // Only auto-join if the user has provided a display name; otherwise they
+    // land on the form pre-filled with the room code and click Join themselves.
+    if (displayName.trim()) {
+      clientRef.current?.joinRoom(initialRoomCode, displayName.trim())
+    }
+    // If no display name, the field is pre-filled with the room code; the user
+    // types their name and clicks Join — no special handling needed.
+  }, [connectionState, initialRoomCode, displayName, accountRecovery.status])
 
   useEffect(() => {
     if (!recoverOnMount || recoveryClaimedRef.current || accountRecovery.status === 'none') return
@@ -106,6 +153,21 @@ export function OnlineLobby({ onBack, recoverOnMount = false }: OnlineLobbyProps
     allConnected,
   )
 
+  const shareableLink = room
+    ? `${window.location.origin}/${room.id}`
+    : undefined
+
+  const handleCopyLink = () => {
+    if (!shareableLink) return
+    navigator.clipboard.writeText(shareableLink).then(() => {
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    }).catch(() => {
+      // Fallback: copy just the room code
+      navigator.clipboard.writeText(room!.id).catch(() => undefined)
+    })
+  }
+
   if (game?.status === 'finished') {
     const winner = game.players.find(
       (player) => player.id === game.winnerPlayerId,
@@ -121,7 +183,7 @@ export function OnlineLobby({ onBack, recoverOnMount = false }: OnlineLobbyProps
               clearSession: () => setSession(undefined),
               clearGameLog: () => setGameLog([]),
             },
-            onBack,
+            leaveAndGoHome,
           )
         }
         actionLabel={t('back')}
@@ -251,7 +313,7 @@ export function OnlineLobby({ onBack, recoverOnMount = false }: OnlineLobbyProps
         <button
           type="button"
           className="lobby-back-btn"
-          onClick={onBack}
+          onClick={leaveAndGoHome}
         >
           ← {t('back')}
         </button>
@@ -338,13 +400,24 @@ export function OnlineLobby({ onBack, recoverOnMount = false }: OnlineLobbyProps
                 <span className="lbl">Mã phòng</span>
                 <span className="room-code">{room.id}</span>
               </div>
-              <button
-                type="button"
-                className="copy-btn"
-                onClick={() => navigator.clipboard.writeText(room.id)}
-              >
-                📋 Copy
-              </button>
+              <div className="room-code-actions">
+                <button
+                  type="button"
+                  className="copy-btn"
+                  title="Sao chép mã phòng"
+                  onClick={() => navigator.clipboard.writeText(room.id).catch(() => undefined)}
+                >
+                  📋 Mã
+                </button>
+                <button
+                  type="button"
+                  className="copy-btn copy-btn--link"
+                  title="Sao chép đường dẫn phòng"
+                  onClick={handleCopyLink}
+                >
+                  {linkCopied ? '✓ Đã sao chép!' : '🔗 Link'}
+                </button>
+              </div>
             </div>
 
             <p className="conn-line">

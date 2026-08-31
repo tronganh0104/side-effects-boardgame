@@ -4,11 +4,22 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and uses calendar dates because this repository does not currently ship semantic releases.
 
-## [Unreleased]
+## [0.1.0] - 2026-08-31
 
 ### Added
 
 - Room leave and resume support in the online lobby flow.
+- Room links in the URL bar so online rooms can be opened directly from `/<ROOMCODE>`.
+- A second lobby copy action for sharing the full room link, alongside the raw room code.
+
+### Changed
+
+- The online lobby now pre-fills and auto-joins from a room code in the URL when possible, and clears the URL when leaving or recovery fails.
+
+## [Unreleased]
+
+### Added
+
 - A forfeit action that ends the active game and resolves the room state.
 - Manual discard support for active turns.
 - Compact board controls, centered deck placement, and fixed-size cards.
@@ -30,4 +41,3 @@ The format follows Keep a Changelog and uses calendar dates because this reposit
 ## [2026-08-10]
 
 Initial documented release of the current Side Effects Boardgame workspace snapshot.
-
