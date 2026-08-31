@@ -64,7 +64,6 @@ function player(overrides: Partial<PlayerState> & { id: string; name: string }):
     hand: [],
     psyche: { slots: [] },
     effects: { skipTurns: 0, cannotPlayTurns: 0, skipDrawTurns: 0 },
-    tradeUsedThisTurn: false,
     ...overrides,
   }
 }
@@ -151,13 +150,14 @@ describe('describeCommand', () => {
     discard: { type: 'discard', cardInstanceId: 'extra-card' },
     discardManual: { type: 'discardManual', cardInstanceId: 'extra-card' },
     endTurn: { type: 'endTurn' },
-    tradeCards: {
+      tradeCards: {
       type: 'tradeCards',
       initiatorPlayerId: 'p1',
       initiatorCardId: 'drug-dep',
       partnerPlayerId: 'p2',
       partnerCardId: 'bob-hand-card',
     },
+    surrender: { type: 'surrender' },
   }
 
   // tradeCards deliberately breaks the "actor" convention: unlike every other

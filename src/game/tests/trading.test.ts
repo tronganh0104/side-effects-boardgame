@@ -58,20 +58,30 @@ describe('tradeCards', () => {
     expect(resultPartner.hand.some((card) => card.instanceId === partnerCard.instanceId)).toBe(false)
   })
 
-  it('spends the initiating player quota but not the partner quota', () => {
+  it('allows multiple trades in the same turn', () => {
     const game = playableGame()
     const initiator = currentPlayer(game)
     const partner = otherPlayer(game)
 
-    const result = tradeCards(game, {
+    const afterFirst = tradeCards(game, {
       initiatorPlayerId: initiator.id,
       initiatorCardId: initiator.hand[0].instanceId,
       partnerPlayerId: partner.id,
       partnerCardId: partner.hand[0].instanceId,
     })
 
-    expect(result.players.find((player) => player.id === initiator.id)!.tradeUsedThisTurn).toBe(true)
-    expect(result.players.find((player) => player.id === partner.id)!.tradeUsedThisTurn).toBe(false)
+    const initiatorAfter = afterFirst.players.find((p) => p.id === initiator.id)!
+    const partnerAfter = afterFirst.players.find((p) => p.id === partner.id)!
+
+    // A second trade in the same turn must succeed.
+    expect(() =>
+      tradeCards(afterFirst, {
+        initiatorPlayerId: initiator.id,
+        initiatorCardId: initiatorAfter.hand[0].instanceId,
+        partnerPlayerId: partner.id,
+        partnerCardId: partnerAfter.hand[0].instanceId,
+      }),
+    ).not.toThrow()
   })
 
   it('does not touch cardsPlayedThisTurn, drawPile, or discardPile', () => {
@@ -145,31 +155,6 @@ describe('tradeCards', () => {
     ).toThrow('running turn has drawn')
   })
 
-  it('rejects when the initiator has already traded this turn', () => {
-    const game = playableGame()
-    const initiator = currentPlayer(game)
-    const partner = otherPlayer(game)
-
-    const afterFirstTrade = tradeCards(game, {
-      initiatorPlayerId: initiator.id,
-      initiatorCardId: initiator.hand[0].instanceId,
-      partnerPlayerId: partner.id,
-      partnerCardId: partner.hand[0].instanceId,
-    })
-
-    const initiatorAfter = afterFirstTrade.players.find((player) => player.id === initiator.id)!
-    const partnerAfter = afterFirstTrade.players.find((player) => player.id === partner.id)!
-
-    expect(() =>
-      tradeCards(afterFirstTrade, {
-        initiatorPlayerId: initiator.id,
-        initiatorCardId: initiatorAfter.hand[0].instanceId,
-        partnerPlayerId: partner.id,
-        partnerCardId: partnerAfter.hand[0].instanceId,
-      }),
-    ).toThrow('already traded this turn')
-  })
-
   it('rejects when a card is not in its claimed owner hand', () => {
     const game = playableGame()
     const initiator = currentPlayer(game)
@@ -238,29 +223,14 @@ describe('tradeCards', () => {
   })
 })
 
-describe('beginTurn quota reset', () => {
-  it('resets the incoming player quota and leaves the outgoing player alone', () => {
+describe('endTurn', () => {
+  it('advances to the next player without disturbing player state', () => {
     const game = playableGame()
     const initiator = currentPlayer(game)
     const partner = otherPlayer(game)
-    // Force both players' quotas to "used" so we can tell reset apart from
-    // an already-false default.
-    const bothUsed = {
-      ...game,
-      players: game.players.map((player) => ({
-        ...player,
-        tradeUsedThisTurn: true,
-      })),
-    }
 
-    const nextTurn = endTurn(bothUsed, initiator.id)
+    const nextTurn = endTurn(game, initiator.id)
 
     expect(nextTurn.currentPlayerId).toBe(partner.id)
-    expect(
-      nextTurn.players.find((player) => player.id === partner.id)!.tradeUsedThisTurn,
-    ).toBe(false)
-    expect(
-      nextTurn.players.find((player) => player.id === initiator.id)!.tradeUsedThisTurn,
-    ).toBe(true)
   })
 })

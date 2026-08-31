@@ -81,7 +81,6 @@ describe('localTradeDriver + local trade bot', () => {
     expect(useTradeStore.getState().lastCloseReason).toBe('declined')
 
     const game = useGameStore.getState().gameState!
-    expect(game.players.find((player) => player.id === initiator.id)!.tradeUsedThisTurn).toBe(false)
     // Hands are byte-for-byte the pre-invite hands — nothing was ever placed.
     expect(game.players.find((player) => player.id === partner.id)!.hand).toEqual(partner.hand)
   })
@@ -146,7 +145,6 @@ describe('localTradeDriver + local trade bot', () => {
     expect(afterInitiator.hand.some((card) => card.instanceId === initiatorCard.instanceId)).toBe(false)
     expect(afterPartner.hand.some((card) => card.instanceId === initiatorCard.instanceId)).toBe(true)
     expect(afterPartner.hand.some((card) => card.instanceId === expectedPartnerCard.instanceId)).toBe(false)
-    expect(afterInitiator.tradeUsedThisTurn).toBe(true)
   })
 
   it('never confirms on the bot\'s behalf while merely responding to an invite', () => {
@@ -262,9 +260,6 @@ describe('localTradeDriver + local trade bot', () => {
 
     expect(useTradeStore.getState().session).toBeNull()
     expect(useTradeStore.getState().lastCloseReason).toBe('cancelled')
-
-    const game = useGameStore.getState().gameState!
-    expect(game.players.find((player) => player.id === initiator.id)!.tradeUsedThisTurn).toBe(false)
 
     // Inviting again afterwards must succeed, not be rejected as "still
     // busy" — `guarded` swallows thrown errors into `.error` rather than
