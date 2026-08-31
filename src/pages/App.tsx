@@ -101,6 +101,7 @@ export function App() {
       onDraw={store.draw}
       onEndTurn={store.endTurn}
       onForfeit={store.forfeit}
+      onSurrender={store.surrender}
       onClearError={() => {
         store.clearError()
         clearTradeError()

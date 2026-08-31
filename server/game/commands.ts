@@ -16,6 +16,7 @@ export type GameCommand =
   | { type: 'discard'; cardInstanceId: string }
   | { type: 'discardManual'; cardInstanceId: string }
   | { type: 'endTurn' }
+  | { type: 'surrender' }
   | {
       type: 'tradeCards'
       initiatorPlayerId: string

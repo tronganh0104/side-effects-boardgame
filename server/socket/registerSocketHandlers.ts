@@ -86,6 +86,8 @@ export function parseGameCommandPayload(payload: unknown): GameCommand {
       return { type: 'draw' }
     case 'forfeit':
       return { type: 'forfeit' }
+    case 'surrender':
+      return { type: 'surrender' }
     case 'endTurn':
       return { type: 'endTurn' }
     case 'playDrug':
@@ -313,14 +315,15 @@ export function registerSocketHandlers(
 
     socket.on('room:leave', () => {
       try {
-        const session = activeSession(socket)
+        // Use the raw sessions map directly instead of activeSession() so
+        // that a player can always leave even if their socket is not currently
+        // marked connected (e.g. mid-reconnect or after a brief drop).
+        const session = sessions.get(socket.id)
+        if (!session) throw new Error('Join a room first.')
         trade.closeRoomSessions(session.roomId, 'cancelled')
         const room = rooms.leaveRoom(session.roomId, session.playerId)
         sessions.delete(socket.id)
         socket.leave(session.roomId)
-        // A player leaving invalidates any trade session in this room (spec
-        // section 6.3): the two seats a session assumes may no longer both
-        // be occupied.
         socket.emit('room:left')
         if (room) {
           broadcastRoom(room)

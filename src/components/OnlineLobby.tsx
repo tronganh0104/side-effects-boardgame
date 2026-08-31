@@ -235,8 +235,12 @@ export function OnlineLobby({ onBack, recoverOnMount = false, initialRoomCode }:
             clientRef.current?.sendCommand({ type: 'endTurn' })
           }}
           onForfeit={() => clientRef.current?.sendCommand({ type: 'forfeit' })}
+          onSurrender={() => clientRef.current?.sendCommand({ type: 'surrender' })}
           onLeave={() => {
-            if (game.players.length !== 2 || window.confirm(`${t('leaveActiveGameTitle')}\n\n${t('leaveActiveGameBody')}`))
+            const body = game.players.length === 2
+              ? t('leaveActiveGameBody')
+              : t('leaveActiveGameBodyMultiplayer')
+            if (window.confirm(`${t('leaveActiveGameTitle')}\n\n${body}`))
               clientRef.current?.leaveRoom()
           }}
           onClearError={() => setError(undefined)}

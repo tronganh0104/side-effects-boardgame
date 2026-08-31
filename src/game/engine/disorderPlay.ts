@@ -1,4 +1,5 @@
 import { canReceiveDisorder } from './sideEffects'
+import { maybeAutoEndTurn } from './turns'
 import { cannotPlayCards } from './temporaryEffects'
 import { assertGameIsPlaying } from './gameStatus'
 import type { GameState } from './types'
@@ -59,7 +60,7 @@ export function playDisorder(
     throw new Error('The target player is not exposed to this Disorder.')
   }
 
-  return {
+  return maybeAutoEndTurn({
     ...game,
     players: game.players.map((player) => {
       if (player.id === currentPlayer.id) {
@@ -80,5 +81,5 @@ export function playDisorder(
       ...game.turn,
       cardsPlayedThisTurn: game.turn.cardsPlayedThisTurn + 1,
     },
-  }
+  })
 }

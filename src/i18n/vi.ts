@@ -9,7 +9,7 @@ export const vi: Translation = {
     enterPlayers: 'Nhập từ 2 đến 8 tên người chơi không để trống.', displayName: 'Tên người chơi', roomCode: 'Mã phòng',
     createRoom: 'Tạo phòng', joinRoom: 'Vào phòng', host: 'Chủ phòng', connected: 'Đã kết nối', disconnected: 'Mất kết nối',
     connecting: 'Đang kết nối...', reconnecting: 'Mất kết nối. Đang kết nối lại...', restoringGame: 'Đang khôi phục ván chơi...', recoveryFailed: 'Không thể khôi phục ván chơi trước đó.', unavailable: 'Không thể kết nối tới máy chủ.',
-    waitingForReconnect: 'Đang chờ người chơi kết nối lại...', waitingForReconnectCountdown: 'Đang chờ kết nối lại — {seconds}s', disconnectProcessing: 'Đang xử lý...', leaveActiveGameTitle: 'Rời ván?', leaveActiveGameBody: 'Bạn sẽ bị xử thua và đối thủ sẽ chiến thắng.', waitingForHost: 'Đang chờ Chủ phòng bắt đầu.',
+    waitingForReconnect: 'Đang chờ người chơi kết nối lại...', waitingForReconnectCountdown: 'Đang chờ kết nối lại — {seconds}s', disconnectProcessing: 'Đang xử lý...', leaveActiveGameTitle: 'Rời ván?', leaveActiveGameBody: 'Bạn sẽ bị xử thua và đối thủ sẽ chiến thắng.', leaveActiveGameBodyMultiplayer: 'Bài của bạn sẽ trả về bộ bài và lượt chơi sẽ chuyển sang người tiếp theo.', waitingForHost: 'Đang chờ Chủ phòng bắt đầu.',
     yourTurn: 'Lượt của bạn', waitingFor: 'Đang chờ {player}...', currentPlayer: 'Người đang chơi', turn: 'Lượt', phase: 'Giai đoạn',
     cardsPlayed: 'Số lá đã chơi', drawPile: 'Chồng bài rút', discardPile: 'Chồng bài bỏ', hand: 'Bài trên tay', psyche: 'Tâm trí',
     draw: 'Rút bài', drawTwo: 'Rút 2 lá', play: 'Chơi bài', discard: 'Bỏ bài', endTurn: 'Kết thúc lượt',

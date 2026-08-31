@@ -73,6 +73,8 @@ interface GameBoardProps {
   onDraw: () => void
   onEndTurn: () => void
   onForfeit: () => void
+  /** Skip the viewer's next turn without leaving (surrender/pass). */
+  onSurrender?: () => void
   onLeave?: () => void
   onClearError?: () => void
   /** Presence means online mode, same idiom as onLeave: messages go over the
@@ -486,19 +488,9 @@ export function GameBoard(props: GameBoardProps) {
       <div className="top-actions" onClick={(event) => event.stopPropagation()}>
         {props.onLeave && (
           <button type="button" className="btn-danger top-action-btn" onClick={props.onLeave}>
-            Về phòng
+            Rời phòng
           </button>
         )}
-        {game.players.length === 2 && <button
-          type="button"
-          className="btn-danger top-action-btn"
-          disabled={!isViewerTurn || game.status !== 'playing' || isLocked}
-          onClick={() => {
-            if (window.confirm('Bạn chắc chắn muốn xin thua ván này?')) executeCommand(props.onForfeit)
-          }}
-        >
-          Xin thua
-        </button>}
         <button className="log-icon-btn top-action-icon" type="button" onClick={() => { audioManager.play('click'); setShowLog(!showLog) }} aria-label={t('gameLog')}>
           📜
         </button>

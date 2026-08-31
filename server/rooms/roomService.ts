@@ -16,6 +16,8 @@ import {
   drawForTurn,
   endTurn,
   forfeitGame,
+  removePlayer,
+  surrenderTurn,
 } from '../../src/game/engine/turns'
 import type { GameState } from '../../src/game/engine/types'
 import { describeCommand } from '../../src/game/log/describeCommand'
@@ -159,8 +161,8 @@ export class RoomService {
   leaveRoom(roomId: string, playerId: string): Room | undefined {
     const room = this.requireRoom(roomId)
     if (room.status === 'playing') {
-      if (room.players.length !== 2) throw new Error('Leaving an active game is not supported yet.')
-      return this.abandonTwoPlayer(room, playerId)
+      if (room.players.length === 2) return this.abandonTwoPlayer(room, playerId)
+      return this.removePlayerFromActiveGame(room, playerId)
     }
     if (room.status !== 'lobby') throw new Error('This room has already finished.')
     const remainingPlayers = room.players.filter(
@@ -638,6 +640,8 @@ export class RoomService {
         return drawForTurn(game, playerId)
       case 'forfeit':
         return forfeitGame(game, playerId)
+      case 'surrender':
+        return surrenderTurn(game, playerId)
       case 'playDrug':
         return playDrug(
           game,
@@ -686,6 +690,32 @@ export class RoomService {
 
   private notifyMutation(room: Room): void {
     for (const listener of this.mutationListeners) listener(room)
+  }
+
+  private removePlayerFromActiveGame(room: Room, playerId: string): Room {
+    if (!room.gameState || room.players.length < 3) throw new Error('This room is not an active multi-player game.')
+    const player = room.players.find((candidate) => candidate.id === playerId)
+    if (!player) throw new Error('Player is not in this room.')
+    // Close any pending decision owned by the leaving player — the chooser
+    // is gone so the decision can never be resolved normally.
+    if (room.pendingDecision?.chooserPlayerId === playerId) {
+      this.clearDecisionTimer(room.id)
+      room.pendingDecision = undefined
+    }
+    this.clearDisconnectTimer(room.id, playerId)
+    room.gameState = removePlayer(room.gameState, playerId)
+    // Remove from room player list and clean up session token.
+    room.players = room.players.filter((candidate) => candidate.id !== playerId)
+    delete room.sessionTokenHashes[playerId]
+    room.gameLog = [...room.gameLog, `${player.displayName} đã rời ván.`].slice(-30)
+    if (room.gameState.status === 'finished') {
+      room.status = 'finished'
+      this.clearDecisionTimer(room.id)
+      this.clearRoomDisconnectTimers(room.id)
+    }
+    this.persistRoom(room)
+    this.notifyMutation(room)
+    return room
   }
 
   private abandonTwoPlayer(room: Room, playerId: string): Room {

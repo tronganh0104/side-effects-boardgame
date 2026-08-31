@@ -1,4 +1,5 @@
 import type { GameState, PlayerState } from './types'
+import { maybeAutoEndTurn } from './turns'
 import { cannotPlayCards } from './temporaryEffects'
 import { assertGameIsPlaying, finalizeGameIfWon } from './gameStatus'
 
@@ -62,7 +63,7 @@ export function playDrug(
     throw new Error('This Drug does not treat the target Disorder.')
   }
 
-  return finalizeGameIfWon({
+  return maybeAutoEndTurn(finalizeGameIfWon({
     ...game,
     players: replaceCurrentPlayer(game, {
       ...currentPlayer,
@@ -77,5 +78,5 @@ export function playDrug(
       ...game.turn,
       cardsPlayedThisTurn: game.turn.cardsPlayedThisTurn + 1,
     },
-  })
+  }))
 }

@@ -16,6 +16,7 @@ import {
   drawForTurn,
   endTurn as endTurnCommand,
   forfeitGame as forfeitGameCommand,
+  surrenderTurn as surrenderTurnCommand,
 } from '../game/engine/turns'
 import type { GameState } from '../game/engine/types'
 import { describeCommand } from '../game/log/describeCommand'
@@ -56,6 +57,7 @@ interface GameStore {
   manualDiscard: (cardInstanceId: string) => void
   endTurn: () => void
   forfeit: () => void
+  surrender: () => void
   /**
    * Commits a negotiated trade to the engine. Returns whether the engine
    * accepted it — `localTradeDriver` needs this to tell a real commit apart
@@ -274,6 +276,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     forfeit: () =>
       run((game) => forfeitGameCommand(game, game.currentPlayerId), {
         type: 'forfeit',
+      }),
+    surrender: () =>
+      run((game) => surrenderTurnCommand(game, game.currentPlayerId), {
+        type: 'surrender',
       }),
     tradeCards: (command) =>
       run((game) => tradeCardsCommand(game, command), command),

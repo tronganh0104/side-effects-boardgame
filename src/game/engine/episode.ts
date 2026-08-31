@@ -1,4 +1,5 @@
 import { episodeHandlers, type EpisodeEffectOptions } from './episodeHandlers'
+import { maybeAutoEndTurn } from './turns'
 import { assertGameIsPlaying } from './gameStatus'
 import { cannotPlayCards } from './temporaryEffects'
 import type { GameState, PlayerState } from './types'
@@ -131,10 +132,10 @@ export function playEpisode(
       cardsPlayedThisTurn: game.turn.cardsPlayedThisTurn + 1,
     },
   }
-  return handler({
+  return maybeAutoEndTurn(handler({
     game: baseGame,
     attacker: baseGame.players[context.attackerIndex],
     target: baseGame.players.find((player) => player.id === targetPlayerId)!,
     options,
-  })
+  }))
 }

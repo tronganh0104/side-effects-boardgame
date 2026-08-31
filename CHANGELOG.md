@@ -11,12 +11,17 @@ The format follows Keep a Changelog and uses calendar dates because this reposit
 - Room leave and resume support in the online lobby flow.
 - Room links in the URL bar so online rooms can be opened directly from `/<ROOMCODE>`.
 - A second lobby copy action for sharing the full room link, alongside the raw room code.
+- Auto-advance after two actions: the turn ends automatically once a player has played two cards, entering the discard phase if the hand exceeds the limit.
+- Players in a 3P+ active game can now leave mid-game; their hand and Psyche cards return to the draw pile, the turn advances to the next player, and the room continues normally. If only one player remains after a leave, the game ends immediately.
 
 ### Changed
 
 - The online lobby now pre-fills and auto-joins from a room code in the URL when possible, and clears the URL when leaving or recovery fails.
 - Trading no longer has a once-per-turn cap, so players can exchange cards repeatedly within the same turn.
 - Trade state was simplified by removing the per-turn trade flag from player views, persistence, and engine state.
+- Manual discard ("bỏ bài") no longer counts as one of the two play actions per turn.
+- The "Về phòng" surrender button and the duplicate "Xin thua" forfeit button have been removed from the in-game top bar. A single "Rời phòng" button now handles leaving — confirming before acting, with a message appropriate to the player count.
+- The `room:leave` socket handler now uses the raw session map instead of the active-socket check, so players can leave even during a brief disconnect or mid-reconnect.
 
 ## [Unreleased]
 

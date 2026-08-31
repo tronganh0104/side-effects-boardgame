@@ -1,4 +1,5 @@
 import type { DisorderDefinition } from '../cards/types'
+import { maybeAutoEndTurn } from './turns'
 import type { GameState } from './types'
 import { cannotPlayCards } from './temporaryEffects'
 import { assertGameIsPlaying, finalizeGameIfWon } from './gameStatus'
@@ -56,7 +57,7 @@ export function playTherapy(
     throw new Error('This Disorder cannot be treated with Therapy.')
   }
 
-  return finalizeGameIfWon({
+  return maybeAutoEndTurn(finalizeGameIfWon({
     ...game,
     players: game.players.map((player, index) =>
       index === game.currentPlayerIndex
@@ -78,5 +79,5 @@ export function playTherapy(
       ...game.turn,
       cardsPlayedThisTurn: game.turn.cardsPlayedThisTurn + 1,
     },
-  })
+  }))
 }

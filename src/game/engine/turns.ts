@@ -205,6 +205,18 @@ export function drawForTurn(
   }
 }
 
+/** After any action that increments cardsPlayedThisTurn, call this to
+ * auto-advance the turn when the player has used both actions. */
+export function maybeAutoEndTurn(game: GameState): GameState {
+  if (game.turn.phase !== 'play') return game
+  if (game.turn.cardsPlayedThisTurn < MAX_CARDS_PLAYED_PER_TURN) return game
+  const currentPlayer = game.players[game.currentPlayerIndex]
+  if (currentPlayer.hand.length > HAND_LIMIT) {
+    return { ...game, turn: { ...game.turn, phase: 'discard' } }
+  }
+  return advanceTurn(game)
+}
+
 /** Placeholder play command; future card effects can replace the discard destination. */
 export function registerCardPlayed(
   game: GameState,
@@ -235,7 +247,7 @@ export function registerCardPlayed(
   if (card.cardType === 'drug') {
     throw new Error('Use playDrug to play a Drug card.')
   }
-  return {
+  return maybeAutoEndTurn({
     ...game,
     players: replaceCurrentPlayer(game, {
       ...currentPlayer,
@@ -246,7 +258,7 @@ export function registerCardPlayed(
       ...game.turn,
       cardsPlayedThisTurn: game.turn.cardsPlayedThisTurn + 1,
     },
-  }
+  })
 }
 
 /** Discards one card during the enforced hand-limit discard phase. */
@@ -283,7 +295,8 @@ export function discardCard(
     : nextGame
 }
 
-/** Voluntarily discards a card during the play phase and uses one action. */
+/** Voluntarily discards a card during the play phase. Does NOT count as an
+ * action -- cardsPlayedThisTurn is unchanged. */
 export function discardManual(
   game: GameState,
   playerId: string,
@@ -292,12 +305,6 @@ export function discardManual(
   assertGameIsPlaying(game)
   assertCurrentPlayer(game, playerId)
   assertPhase(game, 'play')
-  if (cannotPlayCards(game.players[game.currentPlayerIndex])) {
-    throw new Error('The current player cannot play cards this turn.')
-  }
-  if (game.turn.cardsPlayedThisTurn >= MAX_CARDS_PLAYED_PER_TURN) {
-    throw new Error('A player may play at most two cards per turn.')
-  }
   const currentPlayer = game.players[game.currentPlayerIndex]
   const card = currentPlayer.hand.find((candidate) => candidate.instanceId === cardInstanceId)
   if (!card) throw new Error('The selected card is not in the current player hand.')
@@ -308,7 +315,6 @@ export function discardManual(
       hand: currentPlayer.hand.filter((candidate) => candidate.instanceId !== cardInstanceId),
     }),
     discardPile: [...game.discardPile, card],
-    turn: { ...game.turn, cardsPlayedThisTurn: game.turn.cardsPlayedThisTurn + 1 },
   }
 }
 
@@ -326,6 +332,23 @@ export function endTurn(game: GameState, playerId: string): GameState {
   return advanceTurn(game)
 }
 
+/** Skips the current player's next turn. Can be called at any phase;
+ * the turn advances immediately so other players continue normally. */
+export function surrenderTurn(
+  game: GameState,
+  playerId: string,
+): GameState {
+  assertGameIsPlaying(game)
+  assertCurrentPlayer(game, playerId)
+  const playerIndex = game.players.findIndex((p) => p.id === playerId)
+  const player = game.players[playerIndex]
+  const withSkip = updatePlayer(game, playerIndex, {
+    ...player,
+    effects: { ...player.effects, skipTurns: player.effects.skipTurns + 1 },
+  })
+  return advanceTurn(withSkip)
+}
+
 /** Ends the game immediately for the player who surrenders and returns their
  * hand and all cards in their Psyche to the draw pile. */
 export function forfeitGame(
@@ -336,6 +359,76 @@ export function forfeitGame(
   assertGameIsPlaying(game)
   assertCurrentPlayer(game, playerId)
   return applyTwoPlayerForfeitCore(game, playerId, options)
+}
+
+/**
+ * Removes a player from an active 3P+ game (voluntary leave).
+ * Their hand and Psyche cards return to the shuffled draw pile.
+ * If it was their turn, the turn advances to the next player.
+ * If only one player remains after removal, the game ends.
+ */
+export function removePlayer(
+  game: GameState,
+  playerId: string,
+  options: TurnCommandOptions = {},
+): GameState {
+  assertGameIsPlaying(game)
+  if (game.players.length < 3) {
+    throw new Error('Use forfeit to leave a two-player game.')
+  }
+  const playerIndex = game.players.findIndex((p) => p.id === playerId)
+  if (playerIndex === -1) throw new Error('Player is not in this game.')
+
+  const player = game.players[playerIndex]
+  const returnedCards = [
+    ...player.hand,
+    ...player.psyche.slots.flatMap((slot) =>
+      slot.drug ? [slot.disorder, slot.drug] : [slot.disorder],
+    ),
+  ]
+
+  const remainingPlayers = game.players.filter((p) => p.id !== playerId)
+
+  // If only one player remains they win immediately.
+  if (remainingPlayers.length === 1) {
+    return {
+      ...game,
+      drawPile: shuffle([...game.drawPile, ...returnedCards], options.rng ?? systemRandom),
+      players: remainingPlayers,
+      currentPlayerIndex: 0,
+      currentPlayerId: remainingPlayers[0].id,
+      status: 'finished',
+      winnerPlayerId: remainingPlayers[0].id,
+    }
+  }
+
+  const wasCurrentPlayer = game.currentPlayerIndex === playerIndex
+
+  // Recalculate currentPlayerIndex in the new array.
+  // If the removed player came before (or was) the current player, the index
+  // shifts down by one; clamp with modulo so the last slot wraps correctly.
+  let nextCurrentIndex = wasCurrentPlayer
+    ? playerIndex % remainingPlayers.length
+    : playerIndex < game.currentPlayerIndex
+      ? game.currentPlayerIndex - 1
+      : game.currentPlayerIndex
+
+  nextCurrentIndex = nextCurrentIndex % remainingPlayers.length
+
+  const nextGame: GameState = {
+    ...game,
+    drawPile: shuffle([...game.drawPile, ...returnedCards], options.rng ?? systemRandom),
+    players: remainingPlayers,
+    currentPlayerIndex: nextCurrentIndex,
+    currentPlayerId: remainingPlayers[nextCurrentIndex].id,
+  }
+
+  // If it was the leaving player's turn, start a fresh turn for the next player.
+  if (wasCurrentPlayer) {
+    return beginTurn(nextGame, nextCurrentIndex, game.turnNumber + 1)
+  }
+
+  return nextGame
 }
 
 /** Applies the shared terminal 2-player abandonment/forfeit semantics. */
