@@ -10,7 +10,7 @@
     "build:server": "tsc -p tsconfig.server.json && node -e \"require('node:fs').writeFileSync('dist-server/package.json', '{\\\"type\\\":\\\"commonjs\\\"}')\"",
     "build": "tsc -b && vite build && npm run build:server",
     "server:start": "node dist-server/server/index.js",
-    "test": "vitest run",
+    "test": "vitest run --config vitest.config.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
