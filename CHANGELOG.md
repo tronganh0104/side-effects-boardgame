@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and uses calendar dates because this repository does not currently ship semantic releases.
 
+## [0.1.1] — 2026-09-01
+
+### Removed
+
+- **Supabase auth** — đăng ký và đăng nhập tài khoản đã bị loại bỏ hoàn toàn. Người chơi tham gia phòng với display name, không cần tài khoản.
+- `src/auth/` — xóa `authStore.ts`, `supabaseClient.ts`, `registration.ts` và toàn bộ test đi kèm.
+- `src/components/AuthPanel.tsx` — xóa UI đăng nhập / đăng ký.
+- Account recovery qua Supabase user ID — tính năng "quay lại ván cũ khi đăng nhập lại" không còn hoạt động. Reconnect vẫn hoạt động bình thường qua session token trong tab hiện tại.
+- Các biến môi trường `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_ROOM_PERSISTENCE`.
+- Các socket event `session:recover`, `session:recovery`, `session:replaced` và method `recoverAccountSession`.
+- Các i18n key `auth*` và `account*` trong `vi.ts` và `en.ts`.
+
+### Changed
+
+- `HomeScreen` — đơn giản hóa: bỏ `AuthPanel` và account recovery card, giữ lại logo và hai nút Chơi cùng máy / Chơi trực tuyến.
+- `OnlineLobby` — bỏ `accountRecovery` state và prop `recoverOnMount`; form tham gia phòng hiển thị ngay khi kết nối.
+- `multiplayerClient` — socket kết nối không còn đính kèm `accessToken`; bỏ `AccountRecoveryView` khỏi public API.
+- `App` — bỏ `useAuthStore.initialize()` và prop `onRecover`.
+
 ## [0.1.0] - 2026-08-31
 
 ### Added

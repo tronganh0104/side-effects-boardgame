@@ -7,7 +7,6 @@ import {
   createMultiplayerClient,
   multiplayerServerUrl,
   type ConnectionState,
-  type AccountRecoveryView,
   type MultiplayerSession,
   type RoomView,
 } from '../multiplayer/multiplayerClient'
@@ -21,7 +20,6 @@ import {
 
 interface OnlineLobbyProps {
   onBack: () => void
-  recoverOnMount?: boolean
   initialRoomCode?: string
 }
 
@@ -32,7 +30,7 @@ function pushRoomUrl(roomId: string | undefined): void {
     history.pushState(null, '', target)
 }
 
-export function OnlineLobby({ onBack, recoverOnMount = false, initialRoomCode }: OnlineLobbyProps) {
+export function OnlineLobby({ onBack, initialRoomCode }: OnlineLobbyProps) {
   const [displayName, setDisplayName] = useState('')
   const [roomCode, setRoomCode] = useState(initialRoomCode ?? '')
   const [room, setRoom] = useState<RoomView>()
@@ -42,13 +40,11 @@ export function OnlineLobby({ onBack, recoverOnMount = false, initialRoomCode }:
   const [gameLog, setGameLog] = useState<string[]>([])
   const [connectionState, setConnectionState] =
     useState<ConnectionState>('connecting')
-  const [accountRecovery, setAccountRecovery] = useState<AccountRecoveryView>({ status: 'none' })
   const [now, setNow] = useState(() => Date.now())
   const [linkCopied, setLinkCopied] = useState(false)
   const clientRef = useRef<ReturnType<typeof createMultiplayerClient> | null>(
     null,
   )
-  const recoveryClaimedRef = useRef(false)
 
   const leaveAndGoHome = () => {
     pushRoomUrl(undefined)
@@ -84,20 +80,11 @@ export function OnlineLobby({ onBack, recoverOnMount = false, initialRoomCode }:
         onChatMessage: (message) => useChatStore.getState().append(message),
         onRoomLeft: () => {
           resetRoomUi()
-          // Go all the way back to home so the user isn't stuck on the lobby screen.
           leaveAndGoHome()
         },
         onRecoveryFailed: () => {
           resetRoomUi()
-          // Clear the URL code so a refresh doesn't re-attempt a dead session.
           pushRoomUrl(undefined)
-        },
-        onAccountRecovery: setAccountRecovery,
-        onSessionReplaced: () => {
-          resetRoomUi()
-          pushRoomUrl(undefined)
-          setAccountRecovery({ status: 'none' })
-          setError(t('accountSessionReplaced'))
         },
       },
     )
@@ -116,25 +103,13 @@ export function OnlineLobby({ onBack, recoverOnMount = false, initialRoomCode }:
     if (
       !initialRoomCode ||
       autoJoinAttemptedRef.current ||
-      connectionState !== 'connected' ||
-      // Don't auto-join if account recovery is already in progress.
-      accountRecovery.status !== 'none'
+      connectionState !== 'connected'
     ) return
     autoJoinAttemptedRef.current = true
-    // Only auto-join if the user has provided a display name; otherwise they
-    // land on the form pre-filled with the room code and click Join themselves.
     if (displayName.trim()) {
       clientRef.current?.joinRoom(initialRoomCode, displayName.trim())
     }
-    // If no display name, the field is pre-filled with the room code; the user
-    // types their name and clicks Join — no special handling needed.
-  }, [connectionState, initialRoomCode, displayName, accountRecovery.status])
-
-  useEffect(() => {
-    if (!recoverOnMount || recoveryClaimedRef.current || accountRecovery.status === 'none') return
-    recoveryClaimedRef.current = true
-    clientRef.current?.recoverAccountSession(accountRecovery.status === 'already-connected')
-  }, [accountRecovery, recoverOnMount])
+  }, [connectionState, initialRoomCode, displayName])
 
   useEffect(() => {
     if (!game || !room?.players.some((player) => player.graceExpiresAt !== undefined)) return
@@ -163,7 +138,6 @@ export function OnlineLobby({ onBack, recoverOnMount = false, initialRoomCode }:
       setLinkCopied(true)
       setTimeout(() => setLinkCopied(false), 2000)
     }).catch(() => {
-      // Fallback: copy just the room code
       navigator.clipboard.writeText(room!.id).catch(() => undefined)
     })
   }
@@ -335,22 +309,7 @@ export function OnlineLobby({ onBack, recoverOnMount = false, initialRoomCode }:
           </p>
         )}
 
-        {!room && accountRecovery?.status !== 'none' && (
-          <div className="account-recovery-card">
-            <h2>{t('accountRecoveryTitle')}</h2>
-            <p>{accountRecovery.status === 'already-connected' ? t('accountRecoveryElsewhere') : t('accountRecoveryBody')}</p>
-            {accountRecovery.roomId && <p>{t('roomCode')}: <strong>{accountRecovery.roomId}</strong></p>}
-            <button
-              type="button"
-              className="primary"
-              onClick={() => clientRef.current?.recoverAccountSession(accountRecovery.status === 'already-connected')}
-            >
-              {accountRecovery.status === 'already-connected' ? t('accountTakeover') : t('accountReturnToGame')}
-            </button>
-          </div>
-        )}
-
-        {!room && accountRecovery?.status === 'none' && (
+        {!room && (
           <>
             <label className="name-field">
               <span className="label">{t('displayName')}</span>
@@ -452,7 +411,6 @@ export function OnlineLobby({ onBack, recoverOnMount = false, initialRoomCode }:
                   )
                 })}
               </ul>
-              {/* Chat is available in the lobby too, not just in-game — negotiation can happen any time. */}
               <ChatPanel
                 onSend={(text) => clientRef.current?.sendChat(text)}
                 viewerPlayerId={session?.playerId}

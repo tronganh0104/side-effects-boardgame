@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { useAuthStore } from '../auth/authStore'
+import { useState } from 'react'
 import { FinishedScreen } from '../components/FinishedScreen'
 import { DecisionModal } from '../components/DecisionModal'
 import { GameBoard } from '../components/GameBoard'
@@ -23,21 +22,9 @@ export function App() {
   const [mode, setMode] = useState<'home' | 'local' | 'online'>(
     initialRoomCode ? 'online' : 'home',
   )
-  const [recoverOnOnline, setRecoverOnOnline] = useState(false)
   const store = useGameStore()
   const game = store.gameState
 
-  useEffect(() => {
-    void useAuthStore.getState().initialize()
-  }, [])
-
-  // Local hot-seat trading: the same negotiation machine as online
-  // (`createTradeSessionStore`, driven here by `localTradeDriver` instead of
-  // `server/trade/tradeGateway.ts`), but the other side is a bot
-  // (`useLocalTradeBot`, wired inside `GameBoard`) instead of a second human
-  // handing the device back and forth. The human is always the initiator —
-  // `game.currentPlayerId`, the same player GameBoard already renders when
-  // no `viewerPlayerId` is supplied.
   const tradeError = useLocalTradeDriver((state) => state.error)
   const clearTradeError = useLocalTradeDriver((state) => state.clearError)
   const tradeSession = useTradeStore((state) => state.session)
@@ -46,23 +33,14 @@ export function App() {
     return (
       <HomeScreen
         onLocal={() => setMode('local')}
-        onOnline={() => {
-          setRecoverOnOnline(false)
-          setMode('online')
-        }}
-        onRecover={() => {
-          setRecoverOnOnline(true)
-          setMode('online')
-        }}
+        onOnline={() => setMode('online')}
       />
     )
   if (mode === 'online') return <OnlineLobby
     onBack={() => {
-      setRecoverOnOnline(false)
       setMode('home')
       history.pushState(null, '', '/')
     }}
-    recoverOnMount={recoverOnOnline}
     initialRoomCode={initialRoomCode}
   />
   if (!game)
