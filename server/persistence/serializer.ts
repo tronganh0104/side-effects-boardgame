@@ -8,7 +8,6 @@ export function serializeRoom(room: Room): PersistedRoomSnapshot {
       ...room,
       players: room.players.map((player) => ({
         id: player.id,
-        ...(player.userId !== undefined ? { userId: player.userId } : {}),
         displayName: player.displayName,
         connected: player.connected,
         ...(player.graceExpiresAt !== undefined
@@ -46,7 +45,6 @@ export function deserializeRoom(snapshot: PersistedRoomSnapshot): Room {
     pendingDecision: migratedPendingDecision,
     players: room.players.map((player) => ({
       ...player,
-      ...(typeof player.userId === 'string' && player.userId ? { userId: player.userId } : {}),
       connected: false,
       socketId: undefined,
     })),

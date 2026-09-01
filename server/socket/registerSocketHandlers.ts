@@ -10,9 +10,6 @@ import { RoomService } from '../rooms/roomService'
 import type { Room } from '../rooms/types'
 import { createTradeGateway } from '../trade/tradeGateway'
 import { lockableCardId } from '../trade/lockedCardGuard'
-import { createSocketAuthMiddleware } from '../auth/socketAuth'
-import type { AuthenticatedSocketData } from '../auth/socketAuth'
-import type { AccessTokenVerifier } from '../auth/supabaseTokenVerifier'
 
 interface Session {
   roomId: string
@@ -145,9 +142,7 @@ export function parseDecisionPayload(payload: unknown): {
 export function registerSocketHandlers(
   io: Server,
   rooms: RoomService,
-  authVerifier?: AccessTokenVerifier,
 ): void {
-  io.use(createSocketAuthMiddleware(authVerifier))
   const sessions = new Map<string, Session>()
   const chat = createChatGateway({ io, rooms })
   const trade = createTradeGateway({ io, rooms })
@@ -192,60 +187,41 @@ export function registerSocketHandlers(
       throw new Error('This socket session is no longer active.')
     return session
   }
-  const authenticatedUserId = (socket: Socket): string | undefined =>
-    (socket.data as AuthenticatedSocketData).authUserId
-  const recoveryPayload = (room: Room, player: Room['players'][number], status: 'recoverable' | 'already-connected') => ({
-    status,
-    roomId: room.id,
-    playerId: player.id,
-    displayName: player.displayName,
-  })
 
   io.on('connection', (socket) => {
     chat.attach(socket, () => activeSession(socket), (error) => fail(socket, error))
     trade.attach(socket, () => activeSession(socket), (error) => fail(socket, error))
 
     socket.on('room:create', (payload: unknown) => {
-        try {
-          const { displayName } = parseRoomCreatePayload(payload)
-          const { room, player, session } = rooms.createRoom(displayName, socket.id, authenticatedUserId(socket))
-          sessions.set(socket.id, { roomId: room.id, playerId: player.id })
-          socket.join(room.id)
-          socket.emit('session:restored', session)
-          socket.emit('room:state', roomState(room))
-        } catch (error) {
-          fail(socket, error)
-        }
-      })
+      try {
+        const { displayName } = parseRoomCreatePayload(payload)
+        const { room, player, session } = rooms.createRoom(displayName, socket.id)
+        sessions.set(socket.id, { roomId: room.id, playerId: player.id })
+        socket.join(room.id)
+        socket.emit('session:restored', session)
+        socket.emit('room:state', roomState(room))
+      } catch (error) {
+        fail(socket, error)
+      }
+    })
 
     socket.on('room:join', (payload: unknown) => {
-        try {
-          const { roomId, displayName } = parseRoomJoinPayload(payload)
-          const { room, player, session } = rooms.joinRoom(
-            roomId,
-            displayName,
-            socket.id,
-            authenticatedUserId(socket),
-          )
-          sessions.set(socket.id, { roomId, playerId: player.id })
-          socket.join(roomId)
-          socket.emit('session:restored', session)
-          broadcastRoom(room)
-        } catch (error) {
-          fail(socket, error)
-        }
-      })
+      try {
+        const { roomId, displayName } = parseRoomJoinPayload(payload)
+        const { room, player, session } = rooms.joinRoom(roomId, displayName, socket.id)
+        sessions.set(socket.id, { roomId, playerId: player.id })
+        socket.join(roomId)
+        socket.emit('session:restored', session)
+        broadcastRoom(room)
+      } catch (error) {
+        fail(socket, error)
+      }
+    })
 
     socket.on('session:resume', (payload: unknown) => {
       try {
         const { roomId, playerId, sessionToken } = parseSessionPayload(payload)
-        const room = rooms.resumeSession(
-          roomId,
-          playerId,
-          sessionToken,
-          socket.id,
-          authenticatedUserId(socket),
-        )
+        const room = rooms.resumeSession(roomId, playerId, sessionToken, socket.id)
         sessions.set(socket.id, { roomId, playerId })
         socket.join(roomId)
         socket.emit('session:restored', { roomId, playerId, sessionToken })
@@ -254,51 +230,6 @@ export function registerSocketHandlers(
       } catch {
         // Do not reveal whether a room, player, or credential was invalid.
         socket.emit('game:error', 'Unable to restore session.')
-      }
-    })
-
-    socket.on('session:recover', () => {
-      const userId = authenticatedUserId(socket)
-      if (!userId) {
-        socket.emit('session:recovery', { status: 'none' })
-        return
-      }
-      const recovery = rooms.findAccountRecovery(userId)
-      socket.emit(
-        'session:recovery',
-        recovery
-          ? recoveryPayload(recovery.room, recovery.player, recovery.status)
-          : { status: 'none' },
-      )
-    })
-
-    socket.on('session:recover:claim', (payload: unknown) => {
-      try {
-        const userId = authenticatedUserId(socket)
-        if (!userId) throw new Error('Unable to recover session.')
-        const takeover = Boolean(
-          payload && typeof payload === 'object' && !Array.isArray(payload) &&
-          (payload as Record<string, unknown>).takeover === true,
-        )
-        const recovered = rooms.recoverAccountSession(userId, socket.id, takeover)
-        if (recovered.replacedSocketId) {
-          trade.closeRoomSessions(recovered.room.id, 'cancelled')
-          io.to(recovered.replacedSocketId).emit('session:replaced')
-          sessions.delete(recovered.replacedSocketId)
-        }
-        sessions.set(socket.id, { roomId: recovered.room.id, playerId: recovered.player.id })
-        socket.join(recovered.room.id)
-        socket.emit('session:restored', recovered.session)
-        broadcastRoom(recovered.room)
-        broadcastGame(recovered.room)
-      } catch (error) {
-        if (error instanceof Error && error.message === 'This session is active elsewhere.') {
-          const recovery = userIdForRecovery(socket, rooms)
-          if (recovery)
-            socket.emit('session:recovery', recoveryPayload(recovery.room, recovery.player, 'already-connected'))
-          return
-        }
-        socket.emit('game:error', 'Unable to recover session.')
       }
     })
 
@@ -315,9 +246,6 @@ export function registerSocketHandlers(
 
     socket.on('room:leave', () => {
       try {
-        // Use the raw sessions map directly instead of activeSession() so
-        // that a player can always leave even if their socket is not currently
-        // marked connected (e.g. mid-reconnect or after a brief drop).
         const session = sessions.get(socket.id)
         if (!session) throw new Error('Join a room first.')
         trade.closeRoomSessions(session.roomId, 'cancelled')
@@ -338,10 +266,6 @@ export function registerSocketHandlers(
       try {
         const session = activeSession(socket)
         const command = parseGameCommandPayload(payload)
-        // Spec section 6.1: a card placed into a trade slot must not be
-        // playable or discardable while the session is open, or the other
-        // side can confirm against a card that no longer exists. This is a
-        // UX guard only — the engine still re-validates at commit time.
         const targetedCardId = lockableCardId(command)
         if (targetedCardId && trade.isCardLocked(session.playerId, targetedCardId))
           throw new Error(
@@ -362,9 +286,6 @@ export function registerSocketHandlers(
         const beforePlayerId = gameBefore?.currentPlayerId
         const nextGame = rooms.executeCommand(session.roomId, session.playerId, command)
         const room = rooms.getRoom(session.roomId)!
-        // Spec section 6.3: a trade session becomes invalid once the current
-        // turn ends or the game finishes, since it was negotiated against a
-        // hand state that may no longer hold.
         if (
           nextGame.status === 'finished' ||
           nextGame.currentPlayerId !== beforePlayerId
@@ -378,25 +299,25 @@ export function registerSocketHandlers(
     })
 
     socket.on('game:decision', (payload: unknown) => {
-        try {
-          const session = activeSession(socket)
-          const { decisionId, choiceIds } = parseDecisionPayload(payload)
-          const beforePlayerId = rooms.getRoom(session.roomId)?.gameState?.currentPlayerId
-          const nextGame = rooms.resolveDecision(
-            session.roomId,
-            session.playerId,
-            decisionId,
-            choiceIds,
-          )
-          const room = rooms.getRoom(session.roomId)!
-          if (nextGame.status === 'finished' || nextGame.currentPlayerId !== beforePlayerId)
-            trade.closeRoomSessions(session.roomId, 'cancelled')
-          broadcastRoom(room)
-          broadcastGame(room)
-        } catch (error) {
-          fail(socket, error)
-        }
-      })
+      try {
+        const session = activeSession(socket)
+        const { decisionId, choiceIds } = parseDecisionPayload(payload)
+        const beforePlayerId = rooms.getRoom(session.roomId)?.gameState?.currentPlayerId
+        const nextGame = rooms.resolveDecision(
+          session.roomId,
+          session.playerId,
+          decisionId,
+          choiceIds,
+        )
+        const room = rooms.getRoom(session.roomId)!
+        if (nextGame.status === 'finished' || nextGame.currentPlayerId !== beforePlayerId)
+          trade.closeRoomSessions(session.roomId, 'cancelled')
+        broadcastRoom(room)
+        broadcastGame(room)
+      } catch (error) {
+        fail(socket, error)
+      }
+    })
 
     socket.on('disconnect', () => {
       const session = sessions.get(socket.id)
@@ -416,9 +337,4 @@ export function registerSocketHandlers(
       }
     })
   })
-}
-
-function userIdForRecovery(socket: Socket, rooms: RoomService) {
-  const userId = (socket.data as AuthenticatedSocketData).authUserId
-  return userId ? rooms.findAccountRecovery(userId) : undefined
 }

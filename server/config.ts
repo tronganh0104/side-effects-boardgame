@@ -1,8 +1,6 @@
 export interface ServerConfig {
   port: number
   clientOrigins: string[]
-  /** Used for Supabase JWT/JWKS verification; safe for local in-memory rooms. */
-  supabaseAuthUrl?: string
   supabase?: { url: string; secretKey: string }
 }
 
@@ -22,16 +20,13 @@ export function getServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCon
 
   const url = env.SUPABASE_URL
   const secretKey = env.SUPABASE_SECRET_KEY
-  const persistenceEnabled = env.SUPABASE_ROOM_PERSISTENCE === 'true' || env.NODE_ENV === 'production'
+  const persistenceEnabled = env.SUPABASE_ROOM_PERSISTENCE === 'true'
   if (persistenceEnabled && Boolean(url) !== Boolean(secretKey))
     throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY must be set together.')
-  if (env.NODE_ENV === 'production' && (!url || !secretKey))
-    throw new Error('Production requires Supabase room persistence configuration.')
 
   return {
     port,
     clientOrigins,
-    ...(url ? { supabaseAuthUrl: url } : {}),
     ...(persistenceEnabled && url && secretKey ? { supabase: { url, secretKey } } : {}),
   }
 }

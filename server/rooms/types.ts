@@ -3,8 +3,6 @@ import type { GameCommand } from '../game/commands'
 
 export interface RoomPlayer {
   id: string
-  /** Verified Supabase subject. Never projected in room or game views. */
-  userId?: string
   displayName: string
   connected: boolean
   socketId?: string

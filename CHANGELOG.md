@@ -22,6 +22,21 @@ The format follows Keep a Changelog and uses calendar dates because this reposit
 - `OnlineLobby` — bỏ `accountRecovery` state và prop `recoverOnMount`; form tham gia phòng hiển thị ngay khi kết nối.
 - `multiplayerClient` — socket kết nối không còn đính kèm `accessToken`; bỏ `AccountRecoveryView` khỏi public API.
 - `App` — bỏ `useAuthStore.initialize()` và prop `onRecover`.
+- `server/config.ts` — bỏ guard `NODE_ENV=production` bắt buộc Supabase; persistence chỉ bật khi `SUPABASE_ROOM_PERSISTENCE=true`. Server khởi động bình thường trên Render mà không cần cấu hình database.
+- `server/app.ts` — bỏ `authVerifier` dependency; `createGameServer` không còn nhận hoặc khởi tạo Supabase token verifier.
+- `server/socket/registerSocketHandlers.ts` — bỏ `io.use(socketAuthMiddleware)`; bỏ handler `session:recover` và `session:recover:claim`; signature `registerSocketHandlers` không còn nhận `authVerifier`.
+- `server/rooms/roomService.ts` — bỏ `userId` khỏi `createRoom`, `joinRoom`, `resumeSession`, `createPlayer`; xóa `findAccountRecovery` và `recoverAccountSession`.
+- `server/rooms/types.ts` — bỏ field `userId` khỏi `RoomPlayer`.
+- `server/persistence/serializer.ts` — bỏ serialize/deserialize `userId`.
+- `server/tests/productionServer.test.ts` — cập nhật: `NODE_ENV=production` không còn throw; persistence chỉ bật qua `SUPABASE_ROOM_PERSISTENCE=true`.
+
+### Deleted
+
+- `server/auth/socketAuth.ts`
+- `server/auth/supabaseTokenVerifier.ts`
+- `server/tests/accountRecovery.test.ts`
+- `server/tests/accountRecoverySocket.test.ts`
+- `server/tests/socketAuth.test.ts`
 
 ## [0.1.0] - 2026-08-31
 

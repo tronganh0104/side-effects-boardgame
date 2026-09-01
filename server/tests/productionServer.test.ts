@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createGameServer } from '../app'
 import { getServerConfig } from '../config'
 
-describe('production server configuration', () => {
+describe('server configuration', () => {
   const runningServers: ReturnType<typeof createGameServer>[] = []
 
   afterEach(async () => {
@@ -35,12 +35,12 @@ describe('production server configuration', () => {
       ],
     })
     expect(() => getServerConfig({ PORT: 'invalid' })).toThrow('PORT')
-    expect(() => getServerConfig({ NODE_ENV: 'production' })).toThrow(
-      'Production requires Supabase',
-    )
+    // NODE_ENV=production no longer requires Supabase — in-memory is fine
+    expect(() => getServerConfig({ NODE_ENV: 'production' })).not.toThrow()
+    // Explicit persistence still works when both vars are present
     expect(
       getServerConfig({
-        NODE_ENV: 'production',
+        SUPABASE_ROOM_PERSISTENCE: 'true',
         SUPABASE_URL: 'https://example.supabase.co',
         SUPABASE_SECRET_KEY: 'server-only-key',
       }).supabase,
@@ -48,6 +48,7 @@ describe('production server configuration', () => {
       url: 'https://example.supabase.co',
       secretKey: 'server-only-key',
     })
+    // Without SUPABASE_ROOM_PERSISTENCE=true, supabase block is absent
     expect(
       getServerConfig({
         SUPABASE_URL: 'https://example.supabase.co',
@@ -56,7 +57,6 @@ describe('production server configuration', () => {
     ).toEqual({
       port: 3001,
       clientOrigins: ['http://localhost:5173'],
-      supabaseAuthUrl: 'https://example.supabase.co',
     })
   })
 
