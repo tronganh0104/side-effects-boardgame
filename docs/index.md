@@ -15,3 +15,4 @@ This folder contains practical documentation for people working on the project.
 
 - [Chat panel design](superpowers/specs/2026-08-11-chat-panel-design.md)
 - [Trading design](superpowers/specs/2026-08-11-trading-design.md)
+- [Game rule](side-effects-luat-choi.html)
