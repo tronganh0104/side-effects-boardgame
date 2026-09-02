@@ -16,6 +16,8 @@ import { GameCard } from './cards/GameCard'
 import { CardBack } from './cards/CardBack'
 import { CardHoverProvider, useCardHover } from './cards/cardHoverContext'
 import { SelectionHint } from './board/SelectionHint'
+import { YourTurnToast } from './board/YourTurnToast'
+import { NoticeModal } from './board/NoticeModal'
 import { OpponentAvatarBar } from './OpponentAvatarBar'
 import { OpponentHand } from './OpponentHand'
 import { GameLogDrawer } from './GameLogDrawer'
@@ -242,6 +244,9 @@ export function GameBoard(props: GameBoardProps) {
   const [showChat, setShowChat] = useState(false)
   const [isLocked, setIsLocked] = useState(false) // Lock interactions while waiting for server
   const [sortMode, setSortMode] = useState<'original' | 'type' | 'name'>('original')
+  // NoticeModal for discard-over-limit: shown once per entry into discard
+  // phase, dismissed by the player, not re-shown until next discard phase.
+  const [discardNoticeShown, setDiscardNoticeShown] = useState(false)
 
   // Trade UI mounts in both modes now: online wires these seven callbacks to
   // the socket, local wires them to localTradeDriver — GameBoard can't tell
@@ -389,6 +394,8 @@ export function GameBoard(props: GameBoardProps) {
     if (selectedCardId && !viewerHand.some((card) => card.instanceId === selectedCardId)) {
       setSelectedCardId(undefined)
     }
+    // Reset so the notice fires again next time we enter discard phase
+    if (game.turn.phase !== 'discard') setDiscardNoticeShown(false)
   }, [game.turnNumber, game.turn.cardsPlayedThisTurn, game.turn.phase, viewerHand])
 
   useEffect(() => {
@@ -793,6 +800,22 @@ export function GameBoard(props: GameBoardProps) {
         </>
       )}
     </main>
+    {/* YourTurnToast renders outside <main> so it can be fixed-positioned
+        centrally without being affected by main's transform or overflow. */}
+    <YourTurnToast game={game as PlayerGameView} viewerPlayerId={viewer.id} />
+    {/* NoticeModal: discard phase over-limit. Shown once per discard entry,
+        must be dismissed with "Đã hiểu" — cannot be bypassed by click-outside. */}
+    {isDiscardPhase && !discardNoticeShown && (
+      <NoticeModal
+        title="Quá nhiều lá bài"
+        onConfirm={() => setDiscardNoticeShown(true)}
+      >
+        <p>
+          Bạn đang giữ <strong>{viewerHand.length} lá</strong>.
+          Hãy bỏ bớt <strong>{viewerHand.length - 6} lá</strong> trước khi kết thúc lượt.
+        </p>
+      </NoticeModal>
+    )}
     </CardHoverProvider>
   )
 }

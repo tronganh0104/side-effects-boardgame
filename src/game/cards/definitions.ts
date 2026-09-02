@@ -102,7 +102,7 @@ export const baseDeckEntries: readonly DeckEntry[] = [
       displayName: "You're Having an Episode",
       cardType: 'episode',
     },
-    copies: 10,
+    copies: 20,
   },
   {
     definition: {

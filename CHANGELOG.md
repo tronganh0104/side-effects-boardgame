@@ -15,9 +15,16 @@ The format follows Keep a Changelog and uses calendar dates because this reposit
 - **Log hệ thống trong chat** — sự kiện ván chơi (rút bài, dùng thuốc, gây rối loạn, kết thúc lượt…) xuất hiện inline trong luồng chat xen kẽ theo thứ tự thời gian. System messages phân biệt bằng nền amber nhạt, chữ nghiêng, không có tên người gửi và không tăng badge unread. Tên thẻ/người chơi/rối loạn vẫn được in đậm qua cú pháp `**…**`.
 - `ChatSystemMessage` interface và variant `kind: 'system'` trong `ChatMessage` union (`server/chat/types.ts`).
 - `appendSystemMessage(text)` trong `chatStore` — pipe log vào chat timeline mà không tăng `unreadCount`.
+- **Toast "Đến lượt bạn!"** — `YourTurnToast` component xuất hiện ở giữa màn hình khi lượt chuyển sang người chơi hiện tại, tự mờ dần sau ~2.2 giây. Không cần người chơi ấn gì. Kết hợp với âm thanh `your-turn` vốn đã có trong `useGameAudio`. Khi cửa sổ trình duyệt không được focus, tiêu đề tab tạm thời đổi thành `(Đến lượt bạn!) Side Effects` và tự reset khi tab được focus lại hoặc toast kết thúc.
+- **Popup bắt buộc vượt giới hạn bài** — `NoticeModal` component tái sử dụng shell `.game-error-modal` hiện có để hiển thị popup khi người chơi vào discard phase (tay > 6 lá). Người chơi phải ấn **"Đã hiểu"** để đóng — không thể bỏ qua bằng click ra ngoài. Popup hiện một lần mỗi lần vào discard phase và reset khi sang phase khác.
+- `NoticeModal` là component dùng chung cho thông báo một chiều (thông tin + xác nhận đã đọc), phân biệt rõ với `game-error-modal` inline dùng cho lỗi engine/mạng và với dialog xác nhận có hậu quả phân nhánh.
+
+
 
 ### Changed
 
+- `GameBoard` — render `<YourTurnToast>` và `<NoticeModal>` bên ngoài `<main>` (nhưng trong `CardHoverProvider`) để `position: fixed` hoạt động đúng trên mobile khi parent có `transform`.
+- `src/components/board/YourTurnToast.tsx` — `document.title` lazy-initialized thay vì module-scope constant, tránh `ReferenceError: document is not defined` khi test file import `GameBoard.tsx` trong môi trường Node.js.
 - `PlayerSidebar` — bỏ `<section className="sidebar-log">` và import `GameLogList`; thay bằng `<StatusBar player={player} />`. Nhật ký ván chơi đầy đủ vẫn có thể xem qua nút 📜 (GameLogDrawer).
 - `gameStore` (local mode) — sau mỗi command thành công, các log entry mới được mirror sang `chatStore.appendSystemMessage`.
 - `OnlineLobby` (online mode) — `onGameLog` handler diff với lần broadcast trước (qua `gameLogRef`) và mirror chỉ các entry mới vào chatStore, tránh duplicate khi server gửi full slice.

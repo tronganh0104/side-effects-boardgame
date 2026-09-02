@@ -566,3 +566,80 @@
   margin: 1.3rem 0;
 }
 .or-divider::before, .or-divider::after { content: ""; flex: 1; height: 1px; background: var(--card-border); }
+
+/* ── YourTurnToast ───────────────────────────────────────────────────────
+   Fixed-center toast that appears for ~2s when the turn transitions to
+   the viewer. Renders outside <main> (see GameBoard.tsx) so it always
+   sits centred on the viewport regardless of board scroll / transforms.
+
+   z-index above modals (--z-modal: 50) is intentional: a turn transition
+   toast should overlay even a pending decision modal on the rare frame
+   where both are true simultaneously — the toast fades quickly and
+   doesn't block interaction the way a modal does.
+
+   Transition strategy: two CSS classes rather than one `@keyframes` loop.
+   `your-turn-toast` enters via `slide-up` (already in animations.css).
+   `your-turn-toast-fading` triggers the fade-out by reducing opacity via
+   a transition. React removes the element after FADE_DURATION_MS so the
+   DOM stays clean. */
+
+.your-turn-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: calc(var(--z-modal) + 10);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem 1.6rem;
+  background: var(--card-bg);
+  border: 1px solid rgba(248, 213, 113, 0.5);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 1px rgba(248, 213, 113, 0.15), 0 1rem 3rem rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  /* Enter animation reuses existing keyframe */
+  animation: slide-up 0.22s ease-out both;
+  opacity: 1;
+  transition: opacity 0.4s ease-out;
+}
+
+.your-turn-toast-fading {
+  opacity: 0;
+}
+
+.your-turn-toast-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.your-turn-toast-text {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.01em;
+}
+
+/* ── NoticeModal tweaks ──────────────────────────────────────────────────
+   NoticeModal reuses .game-error-modal / .game-error-panel for the scrim
+   and panel shell. These rules only override the parts that differ for
+   notices vs. errors: title colour (amber instead of red, since these are
+   informational, not error-state), and body paragraph spacing. */
+
+.notice-modal-panel h2 {
+  /* Amber vs the error-panel's red — notices are constraints, not errors */
+  color: #fde68a;
+}
+
+.notice-modal-body {
+  margin: 0 0 1.1rem;
+  color: var(--text-muted);
+}
+
+.notice-modal-body p {
+  margin: 0;
+}
+
+.notice-modal-body strong {
+  color: var(--text-strong);
+}
