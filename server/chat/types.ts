@@ -23,7 +23,19 @@ export interface ChatTextMessage {
   text: string
 }
 
-// A union from day one: the upcoming trade feature adds a `ChatTradeOfferMessage`
-// variant here and a matching branch in the client's message renderer, without
-// touching the transport or the store.
-export type ChatMessage = ChatTextMessage
+/**
+ * System log messages injected into the chat timeline. Never sent from a
+ * client or relayed by the server chat gateway — they are created locally
+ * by `appendSystemMessage` (chatStore) from game log strings, so they have
+ * no `author` and are not counted as unread (players don't need a badge
+ * for their own actions appearing in the feed).
+ */
+export interface ChatSystemMessage {
+  kind: 'system'
+  id: string
+  sentAt: number
+  text: string
+}
+
+// Union grows one variant at a time: trade offer comes next, system log is here now.
+export type ChatMessage = ChatTextMessage | ChatSystemMessage

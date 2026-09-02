@@ -22,6 +22,7 @@ import type { GameState } from '../game/engine/types'
 import { describeCommand } from '../game/log/describeCommand'
 import { t } from '../i18n'
 import type { GameCommand } from '../../server/game/commands'
+import { useChatStore } from './chatStore'
 
 type TradeCardsCommand = Extract<GameCommand, { type: 'tradeCards' }>
 
@@ -95,15 +96,20 @@ export const useGameStore = create<GameStore>((set, get) => {
               (player) => player.id === nextGame.winnerPlayerId,
             )
           : undefined
+      const newEntries = [
+        ...(entry ? [entry] : []),
+        ...(winner ? [t('wins', { player: winner.name })] : []),
+      ]
       set({
         gameState: nextGame,
         error: undefined,
-        gameLog: [
-          ...get().gameLog,
-          ...(entry ? [entry] : []),
-          ...(winner ? [t('wins', { player: winner.name })] : []),
-        ].slice(-30),
+        gameLog: [...get().gameLog, ...newEntries].slice(-30),
       })
+      // Mirror every new log line into the chat timeline as a system message
+      // so players can follow game events in context with their conversation.
+      // appendSystemMessage does not bump the unread badge.
+      const { appendSystemMessage } = useChatStore.getState()
+      for (const line of newEntries) appendSystemMessage(line)
       return true
     } catch (error) {
       set({ error: errorMessage(error) })

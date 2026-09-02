@@ -15,7 +15,7 @@ export const vi: Translation = {
     ownUntreatedDisorder: 'Rối loạn chưa điều trị của bạn', targetUntreatedDisorder: 'Rối loạn chưa điều trị mục tiêu', chooseDisorder: 'Chọn Rối loạn',
     playDrug: 'Chơi Thuốc', playTherapy: 'Chơi Trị liệu', playDisorder: 'Chơi Rối loạn', playEpisode: 'Chơi Cơn phát bệnh',
     discardSelected: 'Bỏ lá đã chọn', takeCard: 'Lấy lá bài', chooseCard: 'Chọn lá bài', gameLog: 'Nhật ký ván chơi',
-    treated: 'Đã điều trị', untreated: 'Chưa điều trị', effects: 'Hiệu ứng', skipTurn: 'Bỏ lượt', cannotDraw: 'Không thể rút bài', cannotPlay: 'Không thể chơi bài',
+    treated: 'Đã điều trị', untreated: 'Chưa điều trị', effects: 'Hiệu ứng', skipTurn: 'Bỏ lượt', cannotDraw: 'Không thể rút bài', cannotPlay: 'Không thể chơi bài', skipTurnStatus: 'Lượt tiếp theo: Bỏ qua lượt', cannotPlayStatus: 'Lượt này: Không được chơi bài', skipDrawStatus: 'Lượt này: Không được rút bài',
     watchingPlayer: 'Đang theo dõi {player}',
     activeEpisodes: 'Cơn đang tác dụng', noActiveEpisodes: 'Chưa có Cơn nào tác dụng lên bạn.', yourInfo: 'Thông tin của bạn',
     newGame: 'Ván mới', winner: 'Người chiến thắng', wins: '{player} đã chiến thắng!',

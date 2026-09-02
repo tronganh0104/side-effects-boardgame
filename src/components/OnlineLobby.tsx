@@ -38,6 +38,9 @@ export function OnlineLobby({ onBack, initialRoomCode }: OnlineLobbyProps) {
   const [game, setGame] = useState<PlayerGameView>()
   const [error, setError] = useState<string>()
   const [gameLog, setGameLog] = useState<string[]>([])
+  // Tracks the last-seen entries so onGameLog can diff and only mirror NEW
+  // lines to chatStore 2014 the server sends the full slice each broadcast.
+  const gameLogRef = useRef<string[]>([])
   const [connectionState, setConnectionState] =
     useState<ConnectionState>('connecting')
   const [now, setNow] = useState(() => Date.now())
@@ -56,7 +59,7 @@ export function OnlineLobby({ onBack, initialRoomCode }: OnlineLobbyProps) {
       clearRoom: () => setRoom(undefined),
       clearGame: () => setGame(undefined),
       clearSession: () => setSession(undefined),
-      clearGameLog: () => setGameLog([]),
+      clearGameLog: () => { setGameLog([]); gameLogRef.current = [] },
     })
   }
 
@@ -70,7 +73,17 @@ export function OnlineLobby({ onBack, initialRoomCode }: OnlineLobbyProps) {
         },
         onGameState: setGame,
         onError: setError,
-        onGameLog: setGameLog,
+        onGameLog: (entries) => {
+          // Keep the local gameLog state in sync (used by GameLogDrawer) and
+          // simultaneously mirror each new line into the chat timeline so
+          // players can follow game events in context with their conversation.
+          setGameLog(entries)
+          const prev = gameLogRef.current
+          const newEntries = entries.slice(prev.length)
+          const { appendSystemMessage } = useChatStore.getState()
+          for (const line of newEntries) appendSystemMessage(line)
+          gameLogRef.current = entries
+        },
         onConnectionState: setConnectionState,
         onSessionRestored: (restoredSession) => {
           setSession(restoredSession)
@@ -155,7 +168,7 @@ export function OnlineLobby({ onBack, initialRoomCode }: OnlineLobbyProps) {
               clearRoom: () => setRoom(undefined),
               clearGame: () => setGame(undefined),
               clearSession: () => setSession(undefined),
-              clearGameLog: () => setGameLog([]),
+              clearGameLog: () => { setGameLog([]); gameLogRef.current = [] },
             },
             leaveAndGoHome,
           )

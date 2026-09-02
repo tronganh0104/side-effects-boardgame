@@ -15,14 +15,24 @@ function formatTime(sentAt: number): string {
   })
 }
 
-export function ChatMessageItem({ message, viewerPlayerId }: ChatMessageItemProps) {
-  const isOwn = message.author.playerId === viewerPlayerId
+/**
+ * Renders bold spans for **…** markers in system log lines — the same
+ * convention GameLogList uses, applied here so card/player/disorder names
+ * stay emphasised when they appear inline with chat bubbles.
+ */
+function renderSystemText(text: string) {
+  return text.split(/\*\*(.+?)\*\*/g).map((part, index) =>
+    index % 2 === 1 ? <strong key={index}>{part}</strong> : part,
+  )
+}
 
-  // Switch on `kind`, not an if/else: this is the extension point for the
-  // trade feature, which adds a `ChatTradeOfferMessage` branch here without
-  // touching ChatMessageList, ChatPanel, or the store.
+export function ChatMessageItem({ message, viewerPlayerId }: ChatMessageItemProps) {
+  // Switch on `kind`, not an if/else: this is the extension point for
+  // system messages, trade offers, and any future variant — each branch
+  // is self-contained and adding one never touches the others.
   switch (message.kind) {
-    case 'text':
+    case 'text': {
+      const isOwn = message.author.playerId === viewerPlayerId
       return (
         <div className={`chat-message ${isOwn ? 'chat-message-own' : ''}`}>
           <div className="chat-message-meta">
@@ -30,6 +40,19 @@ export function ChatMessageItem({ message, viewerPlayerId }: ChatMessageItemProp
             <span className="chat-message-time">{formatTime(message.sentAt)}</span>
           </div>
           <p className="chat-message-text">{message.text}</p>
+        </div>
+      )
+    }
+    case 'system':
+      // System messages sit inline with chat bubbles but read as engine
+      // narration, not player speech: no avatar, no name, slightly inset
+      // and de-emphasised so players can scan past them when catching up
+      // on conversation — but not invisible.
+      return (
+        <div className="chat-message chat-message-system" aria-label="Sự kiện ván chơi">
+          <p className="chat-message-text chat-message-system-text">
+            {renderSystemText(message.text)}
+          </p>
         </div>
       )
     default:

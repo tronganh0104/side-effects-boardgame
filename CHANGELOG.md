@@ -3,6 +3,26 @@
 All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and uses calendar dates because this repository does not currently ship semantic releases.
+Đủ thông tin rồi. Viết changelog:Đây là entry 0.1.2:
+
+---
+
+## [0.1.2] — 2026-09-02
+
+### Added
+
+- **Thanh trạng thái** — `StatusBar` component mới thay thế section "Nhật ký ván chơi" trong sidebar. Hiển thị các hiệu ứng đang áp lên người chơi theo thời gian thực (bỏ lượt, không được chơi bài, không được rút bài) kèm tên rối loạn gây ra và số lượt còn lại. Khi không có hiệu ứng nào, hiển thị "✓ Bình thường". Đọc trực tiếp từ `player.effects` — không cần thay đổi server hay engine.
+- **Log hệ thống trong chat** — sự kiện ván chơi (rút bài, dùng thuốc, gây rối loạn, kết thúc lượt…) xuất hiện inline trong luồng chat xen kẽ theo thứ tự thời gian. System messages phân biệt bằng nền amber nhạt, chữ nghiêng, không có tên người gửi và không tăng badge unread. Tên thẻ/người chơi/rối loạn vẫn được in đậm qua cú pháp `**…**`.
+- `ChatSystemMessage` interface và variant `kind: 'system'` trong `ChatMessage` union (`server/chat/types.ts`).
+- `appendSystemMessage(text)` trong `chatStore` — pipe log vào chat timeline mà không tăng `unreadCount`.
+
+### Changed
+
+- `PlayerSidebar` — bỏ `<section className="sidebar-log">` và import `GameLogList`; thay bằng `<StatusBar player={player} />`. Nhật ký ván chơi đầy đủ vẫn có thể xem qua nút 📜 (GameLogDrawer).
+- `gameStore` (local mode) — sau mỗi command thành công, các log entry mới được mirror sang `chatStore.appendSystemMessage`.
+- `OnlineLobby` (online mode) — `onGameLog` handler diff với lần broadcast trước (qua `gameLogRef`) và mirror chỉ các entry mới vào chatStore, tránh duplicate khi server gửi full slice.
+- `ChatMessageItem` — thêm branch `case 'system'` với `renderSystemText` để render bold spans từ `**…**` markers; `isOwn` chỉ tính cho `case 'text'`.
+- Prop `gameLog` của `PlayerSidebar` đổi thành optional (`gameLog?: string[]`) — không còn dùng trong render, giữ lại để tránh cascade callers; sẽ xóa ở cleanup PR sau.
 
 ## [0.1.1] — 2026-09-01
 

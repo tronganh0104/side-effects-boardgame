@@ -586,3 +586,45 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--chat-brass) 30%, transparent);
 }
 .chat-drawer .chat-panel { min-height: 0; }
+
+/* ── System (game log) messages ──────────────────────────────────────────
+   System messages appear inline with player chat bubbles but narrate game
+   events rather than player speech. The design goals:
+
+   1. Distinguish them clearly from chat without a jarring visual break —
+      they belong in the same scrollable timeline, just visually quieter.
+   2. Never draw the unread badge (chatStore.appendSystemMessage handles
+      this — no CSS needed).
+   3. Let **bold** spans (rendered by ChatMessageItem's renderSystemText)
+      call out card/player/disorder names in the same way GameLogList does.
+
+   Chosen treatment: left-rule in --chat-brass (the same accent used for
+   .chat-message-own), slightly reduced opacity on the text so the line
+   reads as annotation rather than speech, and no .chat-message-meta block
+   (no author name, no timestamp). Keeping the same border-radius and
+   horizontal padding so system lines slot into the flow without jerky
+   height gaps.
+
+   The `--chat-ink-2` colour on the text body (rather than `--chat-ink`)
+   targets the same measured ~3.5:1 range as the timestamp and author-name
+   lines above — acceptable for secondary annotation text in this context. */
+
+.chat-message-system {
+  background: color-mix(in srgb, var(--chat-brass) 5%, transparent);
+  border-left-color: var(--chat-brass);
+  opacity: 0.88;
+}
+
+.chat-message-system-text {
+  color: var(--chat-ink-2);
+  font-size: calc(var(--chat-fs-body) * 0.93);
+  font-style: italic;
+  -webkit-text-stroke: 0.4px var(--chat-ink-2);
+}
+
+.chat-message-system strong {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--chat-ink);
+  -webkit-text-stroke: 0.55px var(--chat-ink);
+}

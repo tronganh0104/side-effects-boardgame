@@ -541,3 +541,73 @@
   -webkit-text-stroke: 0.3px var(--panel-ink, #1a1006);
   paint-order: stroke fill;
 }
+
+/* ── StatusBar (Đề xuất 2) ──────────────────────────────────────────────
+   Replaces .sidebar-log. Inherits the same border-top seam and heading
+   treatment. Does not scroll (at most 3 rows, never overflows). */
+
+.sidebar-status {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--panel-rule, rgba(26, 16, 6, 0.28));
+  padding-top: 0.6rem;
+}
+
+.sidebar-status .sidebar-heading {
+  flex: 0 0 auto;
+}
+
+.status-bar-normal {
+  margin: 0.3rem 0 0;
+  font-size: var(--sidebar-fs-body);
+  color: var(--panel-ink-2, rgba(26, 16, 6, 0.6));
+  font-style: italic;
+}
+
+.status-bar-list {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.status-bar-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: var(--sidebar-fs-body);
+  color: var(--panel-ink, #1a1006);
+  line-height: 1.4;
+  /* Warm amber tint mirrors .chat-message-system: same brass accent, same
+     "this is active right now" signal without reusing the oxblood of
+     .self-turn.is-active (which means "your turn", not "you are affected"). */
+  background: color-mix(in srgb, var(--panel-accent, #b8860b) 7%, transparent);
+  border-left: 3px solid var(--panel-accent, #b8860b);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0.25rem 0.45rem;
+}
+
+.status-bar-icon {
+  flex: 0 0 auto;
+  font-size: 0.85em;
+}
+
+.status-bar-label {
+  flex: 1 1 auto;
+}
+
+.status-bar-source {
+  color: var(--panel-ink-2, rgba(26, 16, 6, 0.6));
+  font-size: 0.88em;
+}
+
+.status-bar-remaining {
+  flex: 0 0 auto;
+  font-size: 0.82em;
+  font-weight: 700;
+  color: var(--panel-ink-2, rgba(26, 16, 6, 0.6));
+  background: color-mix(in srgb, var(--panel-accent, #b8860b) 18%, transparent);
+  border-radius: 3px;
+  padding: 0 0.3rem;
+}
