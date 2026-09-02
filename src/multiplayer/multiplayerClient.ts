@@ -6,7 +6,7 @@ import type { TradeClosedPayload, TradeStatePayload } from '../game/trade/types'
 import { useTradeStore } from '../store/tradeStore'
 
 export const SESSION_KEY = 'side-effect.room-session'
-export const DEFAULT_MULTIPLAYER_SERVER_URL = 'localhost:3001'
+export const DEFAULT_MULTIPLAYER_SERVER_URL = 'https://side-effects-boardgame-gdmq.onrender.com'
 
 export function resolveMultiplayerServerUrl(configuredUrl?: string): string {
   return configuredUrl?.trim() || DEFAULT_MULTIPLAYER_SERVER_URL
